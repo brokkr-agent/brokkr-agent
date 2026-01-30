@@ -1,0 +1,14 @@
+{
+  "name": "whatsapp-claude",
+  "version": "1.0.0",
+  "description": "connect whatsapp to claude code - send tasks from your phone, get results back",
+  "main": "whatsapp-bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node whatsapp-bot.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
