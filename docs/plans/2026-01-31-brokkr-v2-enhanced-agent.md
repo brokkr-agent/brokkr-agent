@@ -3250,6 +3250,134 @@ git commit -m "feat: rewrite whatsapp bot with priority queue and sessions"
 
 ## Phase 4: Webhook Server
 
+### Webhook API Reference
+
+**Base URL:** `http://<host>:3000` (configurable via `WEBHOOK_PORT` env var)
+
+---
+
+#### `GET /health` - Check Agent Availability
+
+Check if the agent is available before submitting tasks. Use this to decide whether to use the agent or a fallback method.
+
+**Request:** None
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "processing": false,
+  "queueDepth": 0
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | Always `"ok"` if server is running |
+| `processing` | boolean | `true` if agent is currently executing a task |
+| `queueDepth` | number | Number of tasks waiting in queue |
+
+**Decision Logic Example (Supabase Edge Function):**
+```typescript
+const health = await fetch('http://brokkr:3000/health').then(r => r.json());
+
+if (!health.processing && health.queueDepth === 0) {
+  // Agent is idle - submit task directly
+  await submitToAgent(task);
+} else if (health.queueDepth < 3) {
+  // Short queue - submit and wait
+  await submitToAgent(task);
+} else {
+  // Agent is busy - use fallback (e.g., direct Claude API)
+  await useFallback(task);
+}
+```
+
+---
+
+#### `POST /webhook` - Submit New Task
+
+Submit a new task to the agent. Creates a 3-character session code for follow-up.
+
+**Request:**
+```json
+{
+  "task": "Research latest AI agent frameworks",
+  "source": "supabase",
+  "metadata": { "userId": "123", "requestId": "abc" }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `task` | string | Yes | The task description for Claude |
+| `source` | string | No | Identifier for the calling system (default: `"external"`) |
+| `metadata` | object | No | Arbitrary metadata to attach to the job |
+
+**Response:**
+```json
+{
+  "success": true,
+  "jobId": "job_1706745600000_abc123",
+  "sessionCode": "k7m",
+  "queuePosition": 1
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Always `true` on success |
+| `jobId` | string | Unique job identifier |
+| `sessionCode` | string | 3-character code to resume this session |
+| `queuePosition` | number | Position in queue (1 = next to run) |
+
+---
+
+#### `POST /webhook/:sessionCode` - Continue Session
+
+Send a follow-up message to an existing session.
+
+**Request:**
+```json
+{
+  "message": "Now summarize the top 3 options"
+}
+```
+
+**Response:** Same as `POST /webhook`
+
+**Errors:**
+- `404` - Session not found or expired (sessions expire after 24 hours)
+- `400` - Not a webhook session (trying to continue a WhatsApp session)
+
+---
+
+#### `GET /webhook/:sessionCode` - Get Session Status
+
+Check the status of a session.
+
+**Response:**
+```json
+{
+  "sessionCode": "k7m",
+  "type": "webhook",
+  "task": "Research latest AI agent frameworks",
+  "status": "active",
+  "createdAt": "2026-01-31T22:00:00.000Z",
+  "lastActivity": "2026-01-31T22:05:00.000Z"
+}
+```
+
+---
+
+### Priority Levels
+
+Webhook tasks are processed with `HIGH` priority (75), which means:
+- They run after any pending WhatsApp tasks (`CRITICAL` = 100)
+- They run before scheduled/cron tasks (`NORMAL` = 50)
+
+---
+
 ### Task 4.1: Express Webhook Server
 
 **Files:**
