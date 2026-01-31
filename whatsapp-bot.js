@@ -1,17 +1,20 @@
-// whatsapp-bot.js
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
+import { spawn } from 'child_process';
 import qrcode from 'qrcode-terminal';
-
-import { enqueue, getPendingJobs } from './lib/queue.js';
-import { processQueue, setSendMessageCallback } from './lib/worker.js';
-import { startHeartbeat, incrementProcessed, incrementFailed } from './lib/heartbeat.js';
-import { info, warn, error, success } from './lib/logger.js';
-import { getSession, updateSession, endSession } from './lib/sessions.js';
+import { parseMessage, getHelpText } from './lib/message-parser.js';
+import { Executor } from './lib/executor.js';
 
 const WORKSPACE = process.cwd();
-const POLL_INTERVAL_MS = 2000;
-const QUEUE_PROCESS_INTERVAL_MS = 1000;
+const DRY_RUN = process.argv.includes('--dry-run');
+
+// Create executor with dry-run setting
+const executor = new Executor({ dryRun: DRY_RUN });
+
+// Register internal handlers
+executor.registerHandler('handleHelp', () => getHelpText());
+executor.registerHandler('handleStatus', () => `Status: ${isProcessing ? 'Processing task' : 'Idle'}\nMode: ${DRY_RUN ? 'DRY-RUN' : 'LIVE'}\nWorkspace: ${WORKSPACE}`);
+executor.registerHandler('handleSessions', () => 'Sessions: Not yet implemented');
 
 // WhatsApp Client
 const client = new Client({
@@ -21,168 +24,296 @@ const client = new Client({
     remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1032721183-alpha.html'
   },
   puppeteer: {
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+    headless: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   },
 });
 
-// Safe send with retry
-async function safeSendMessage(chatId, message, retries = 3) {
-  const MAX_LENGTH = 4000;
-  const chunks = [];
-
-  for (let i = 0; i < message.length; i += MAX_LENGTH) {
-    chunks.push(message.slice(i, i + MAX_LENGTH));
-  }
-
-  for (const chunk of chunks) {
-    for (let i = 0; i < retries; i++) {
-      try {
-        await client.sendMessage(chatId, chunk, { sendSeen: false });
-        return;
-      } catch (err) {
-        warn('WhatsApp', `Send attempt ${i + 1} failed`, { error: err.message });
-        if (i < retries - 1) await new Promise(r => setTimeout(r, 3000));
-      }
+// Safe send message with retry logic
+async function safeSendMessage(client, chatId, message, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await client.sendMessage(chatId, message, { sendSeen: false });
+    } catch (err) {
+      console.error(`Send attempt ${i + 1} failed:`, err.message);
+      if (i < retries - 1) await new Promise(r => setTimeout(r, 3000));
     }
-    throw new Error('Failed to send after all retries');
   }
+  throw new Error('Failed to send after all retries');
 }
 
-// Set up worker callback
-setSendMessageCallback(safeSendMessage);
-
-// Message tracking
-let lastMessageId = null;
-
-async function pollForMessages() {
-  try {
-    const chats = await client.getChats();
-    const myId = client.info?.wid?._serialized;
-    const selfChat = chats.find(c => c.id._serialized === myId);
-
-    if (!selfChat || !myId) return;
-
-    const messages = await selfChat.fetchMessages({ limit: 5 });
-
-    for (const msg of messages.reverse()) {
-      if (msg.id._serialized === lastMessageId) continue;
-      if (!msg.fromMe) continue;
-
-      const text = msg.body.trim();
-      lastMessageId = msg.id._serialized;
-
-      // Handle /claude - one-shot task
-      if (text.toLowerCase().startsWith('/claude ')) {
-        const task = text.slice(8).trim();
-        if (task) {
-          const jobId = enqueue({ type: 'oneshot', task, chatId: myId });
-          info('Queue', `Enqueued job ${jobId}`, { task: task.slice(0, 50) });
-          await safeSendMessage(myId, `Queued: ${task.slice(0, 100)}...`);
-        }
-      }
-
-      // Handle /chat - session-based conversation
-      else if (text.toLowerCase().startsWith('/chat ')) {
-        const message = text.slice(6).trim();
-        if (message) {
-          const session = getSession(myId);
-          const jobId = enqueue({
-            type: 'chat',
-            task: message,
-            chatId: myId,
-            sessionId: session?.sessionId || null
-          });
-          info('Queue', `Enqueued chat job ${jobId}`, { hasSession: !!session });
-        }
-      }
-
-      // Handle /endchat - end session
-      else if (text.toLowerCase() === '/endchat') {
-        endSession(myId);
-        await safeSendMessage(myId, 'Session ended.');
-        info('Session', 'Session ended by user');
-      }
-
-      // Handle /status - bot status
-      else if (text.toLowerCase() === '/status') {
-        const pending = getPendingJobs().length;
-        await safeSendMessage(myId, `Bot online. ${pending} jobs pending.`);
-      }
-    }
-  } catch (err) {
-    // Ignore polling errors - will retry
-  }
-}
-
-// Event handlers
 client.on('qr', qr => {
   console.log('\nScan this QR code with WhatsApp:\n');
   qrcode.generate(qr, { small: true });
 });
 
 client.on('loading_screen', (percent, message) => {
-  info('WhatsApp', `Loading: ${percent}%`, { message });
+  console.log('Loading:', percent + '%', message);
 });
 
 client.on('authenticated', () => {
-  success('WhatsApp', 'Authenticated');
+  console.log('Authenticated!');
 });
 
 client.on('auth_failure', msg => {
-  error('WhatsApp', 'Auth failure', { message: msg });
-  process.exit(1);
+  console.error('Auth failure:', msg);
 });
 
-client.on('disconnected', (reason) => {
-  error('WhatsApp', 'Disconnected', { reason });
-  process.exit(1);
-});
+// Polling fallback - check for new messages every 2 seconds
+let lastMessageId = null;
+let isProcessing = false;
 
-client.on('ready', async () => {
-  success('WhatsApp', 'Ready');
-  info('Bot', `Workspace: ${WORKSPACE}`);
+let pollCount = 0;
+async function pollForMessages() {
+  if (isProcessing) return;
 
-  // Start systems
-  startHeartbeat();
+  pollCount++;
+  const DEBUG = process.argv.includes('--debug');
 
-  // Poll for messages
-  setInterval(pollForMessages, POLL_INTERVAL_MS);
-
-  // Process queue
-  setInterval(processQueue, QUEUE_PROCESS_INTERVAL_MS);
-
-  // Startup notification
   try {
-    const myId = client.info?.wid?._serialized;
-    if (myId) {
-      await safeSendMessage(myId, 'Bot online. Send /claude <task> or /chat <message>');
+    const chats = await client.getChats();
+    const myId = client.info?.wid?._serialized; // @c.us ID for sending
+
+    // Find "message yourself" chat - try multiple methods
+    let selfChat = chats.find(c => c.id._serialized.endsWith('@lid'));
+
+    // Fallback: try to find by matching user's own ID
+    if (!selfChat && myId) {
+      const myNumber = myId.replace('@c.us', '');
+      selfChat = chats.find(c => c.id.user === myNumber || c.id._serialized.includes(myNumber));
+    }
+
+    // Fallback: find chat named "You" or similar self-chat indicators
+    if (!selfChat) {
+      selfChat = chats.find(c => c.isGroup === false && c.name === 'You');
+    }
+
+    if (DEBUG && pollCount % 10 === 0) {
+      console.log(`[Poll #${pollCount}] selfChat: ${!!selfChat}, myId: ${myId}`);
+      if (!selfChat && pollCount === 10) {
+        console.log('Available chats:', chats.slice(0, 5).map(c => ({ id: c.id._serialized, name: c.name })));
+      }
+    }
+
+    if (selfChat && myId) {
+      const messages = await selfChat.fetchMessages({ limit: 1 });
+      const lastMsg = messages[0];
+
+      if (DEBUG && lastMsg) {
+        console.log(`[Poll #${pollCount}] Last msg: "${lastMsg.body?.slice(0, 30)}..." fromMe: ${lastMsg.fromMe}, isNew: ${lastMsg.id._serialized !== lastMessageId}`);
+      }
+
+      if (lastMsg && lastMsg.id._serialized !== lastMessageId && lastMsg.fromMe) {
+        const text = lastMsg.body.trim();
+
+        // Skip bot responses (they start with these patterns)
+        if (text.startsWith('[DRY-RUN]') || text.startsWith('Bot online') || text.startsWith('Starting:') || text.startsWith('Unknown command:')) {
+          lastMessageId = lastMsg.id._serialized;
+          if (DEBUG) console.log('[Skip] Bot response detected');
+          return;
+        }
+
+        // Skip help text output (contains multiple /command lines)
+        if (text.includes('/claude <task>') && text.includes('/help')) {
+          lastMessageId = lastMsg.id._serialized;
+          if (DEBUG) console.log('[Skip] Help text detected');
+          return;
+        }
+
+        // Only process messages starting with /
+        if (text.startsWith('/')) {
+          lastMessageId = lastMsg.id._serialized;
+
+          // Parse the message using our command system
+          const parsed = parseMessage(text);
+          console.log(`\n[${new Date().toISOString()}] Received: "${text}"`);
+          console.log(`Parsed type: ${parsed.type}`);
+
+          // Execute (or dry-run) the command
+          const result = await executor.execute(parsed, { source: 'whatsapp', chatId: myId });
+
+          // Handle based on parsed type
+          if (parsed.type === 'not_command') {
+            // Shouldn't happen since we check for / above, but just in case
+            lastMessageId = lastMsg.id._serialized;
+            return;
+          }
+
+          if (parsed.type === 'unknown_command') {
+            await safeSendMessage(client, myId, `Unknown command: /${parsed.commandName}\n\nUse /help to see available commands.`);
+            return;
+          }
+
+          if (parsed.type === 'session_resume') {
+            if (DRY_RUN) {
+              await safeSendMessage(client, myId, `[DRY-RUN] Session resume:\nCode: ${parsed.sessionCode}\nMessage: ${parsed.message || '(none)'}\n\n(Session management not yet implemented)`);
+            } else {
+              await safeSendMessage(client, myId, `Session /${parsed.sessionCode} - not yet implemented`);
+            }
+            return;
+          }
+
+          // Handle command types
+          const handler = parsed.handler;
+
+          if (handler.type === 'internal') {
+            // Internal commands run immediately
+            const internalHandler = executor.internalHandlers.get(handler.function);
+            if (internalHandler) {
+              const response = await internalHandler(parsed.args, { source: 'whatsapp' });
+              await safeSendMessage(client, myId, response);
+            }
+            return;
+          }
+
+          if (handler.type === 'claude' || handler.type === 'skill') {
+            if (DRY_RUN) {
+              // In dry-run mode, show what would happen
+              const action = result.actions.find(a => a.type === handler.type);
+              let response = `[DRY-RUN] Command received:\n`;
+              response += `Command: /${parsed.commandName}\n`;
+              response += `Type: ${handler.type}\n`;
+              response += `Args: ${JSON.stringify(parsed.args)}\n`;
+              if (action?.prompt) response += `Prompt: "${action.prompt}"\n`;
+              if (action?.skill) response += `Skill: ${action.skill}\n`;
+              if (action?.priority) response += `Priority: ${action.priority}\n`;
+              if (action?.session) response += `Session: create=${action.session.create}, codeLength=${action.session.codeLength}\n`;
+              response += `\n(Would execute Claude in LIVE mode)`;
+              await safeSendMessage(client, myId, response);
+              console.log('Dry-run response sent');
+            } else {
+              // LIVE mode - execute Claude
+              isProcessing = true;
+              const task = handler.type === 'claude' ? parsed.argString : `Use the /${handler.skill} skill: ${parsed.argString}`;
+
+              console.log(`Task: "${task}"`);
+              console.log(`Working dir: ${WORKSPACE}\n`);
+
+              try {
+                await safeSendMessage(client, myId, `Starting: /${parsed.commandName}...`);
+              } catch (e) {
+                console.log('Could not send start message:', e.message);
+              }
+
+              console.log(`Running: claude -p "${task}" --dangerously-skip-permissions\n`);
+
+              const child = spawn('claude', ['-p', task, '--dangerously-skip-permissions'], {
+                cwd: WORKSPACE,
+                env: { ...process.env, FORCE_COLOR: '0' },
+                stdio: ['ignore', 'pipe', 'pipe']
+              });
+
+              let stdout = '';
+              let stderr = '';
+
+              child.stdout.on('data', (data) => {
+                stdout += data.toString();
+              });
+
+              child.stderr.on('data', (data) => {
+                stderr += data.toString();
+              });
+
+              child.on('close', async (code) => {
+                console.log('Command finished with code:', code);
+
+                let output = stdout || stderr || 'Done (no output)';
+                output = output.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+
+                console.log('Result preview:', output.slice(0, 300));
+
+                try {
+                  const MAX_LENGTH = 4000;
+                  if (output.length > MAX_LENGTH) {
+                    for (let i = 0; i < output.length; i += MAX_LENGTH) {
+                      await safeSendMessage(client, myId, output.slice(i, i + MAX_LENGTH));
+                    }
+                  } else {
+                    await safeSendMessage(client, myId, output);
+                  }
+                  console.log('Sent response to WhatsApp');
+                } catch (sendErr) {
+                  console.error('Failed to send response:', sendErr.message);
+                }
+
+                isProcessing = false;
+              });
+
+              child.on('error', (err) => {
+                console.error('Spawn error:', err.message);
+                isProcessing = false;
+              });
+            }
+          }
+        } else if (lastMsg.id._serialized !== lastMessageId) {
+          lastMessageId = lastMsg.id._serialized;
+        }
+      }
     }
   } catch (err) {
-    warn('WhatsApp', 'Could not send startup message');
+    console.error('Polling error:', err.message);
   }
+}
+
+// Track ready state for fallback logic
+let readyFired = false;
+let botStarted = false;
+
+async function startBot() {
+  if (botStarted) return;
+  botStarted = true;
+
+  const mode = DRY_RUN ? 'DRY-RUN' : 'LIVE';
+  console.log(`\nMode: ${mode}`);
+  console.log('Starting message polling...');
+  console.log('Commands: /claude, /help, /status, /research, /github, /x, /youtube, /email, /schedule\n');
+
+  // Start polling immediately
+  setInterval(pollForMessages, 2000);
+
+  // Try to send startup message in background (non-blocking)
+  setTimeout(async () => {
+    try {
+      const myId = client.info?.wid?._serialized;
+      if (myId) {
+        const msg = DRY_RUN
+          ? 'Bot online [DRY-RUN MODE]\nCommands will be parsed but not executed.\nUse /help to see available commands.'
+          : 'Bot online! Use /help to see available commands.';
+        await client.sendMessage(myId, msg, { sendSeen: false });
+        console.log('Sent startup message');
+      }
+    } catch (err) {
+      console.log('Startup message skipped (library still initializing)');
+    }
+  }, 5000);
+}
+
+client.on('ready', () => {
+  readyFired = true;
+  console.log('\nWhatsApp READY!');
+  console.log('Workspace:', WORKSPACE);
+  if (DRY_RUN) {
+    console.log('\n*** DRY-RUN MODE - Commands will be parsed but NOT executed ***');
+  }
+  console.log('\nSend /help to see available commands');
+  console.log('Example: /claude list files in this project\n');
+  startBot();
 });
 
-// Error handlers
-process.on('uncaughtException', (err) => {
-  error('Process', 'Uncaught exception', { error: err.message });
-  process.exit(1);
+// Fallback if ready event doesn't fire (wait 45s for full initialization)
+client.on('authenticated', () => {
+  setTimeout(() => {
+    if (!readyFired && client.info) {
+      console.log('Ready event did not fire, using fallback');
+      startBot();
+    }
+  }, 45000);
 });
 
-process.on('unhandledRejection', (reason) => {
-  error('Process', 'Unhandled rejection', { reason: String(reason) });
-  process.exit(1);
-});
-
-process.on('SIGTERM', () => {
-  info('Process', 'Received SIGTERM');
-  client.destroy().then(() => process.exit(0));
-});
-
-process.on('SIGINT', () => {
-  info('Process', 'Received SIGINT');
-  client.destroy().then(() => process.exit(0));
-});
-
-info('Bot', 'Starting WhatsApp bot (24/7 mode)');
+console.log('Starting WhatsApp bot...');
+if (DRY_RUN) {
+  console.log('*** DRY-RUN MODE ENABLED ***\n');
+} else {
+  console.log('*** LIVE MODE ***\n');
+}
 client.initialize();
