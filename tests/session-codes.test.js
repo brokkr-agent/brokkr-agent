@@ -25,6 +25,40 @@ describe('generateCode', () => {
     }
     expect(codes.size).toBeGreaterThan(90); // Most should be unique
   });
+
+  // Edge case tests for input validation
+  it('throws RangeError for length=0', () => {
+    expect(() => generateCode(0)).toThrow(RangeError);
+    expect(() => generateCode(0)).toThrow('length must be greater than 0');
+  });
+
+  it('throws RangeError for length>36 (charset size)', () => {
+    expect(() => generateCode(37)).toThrow(RangeError);
+    expect(() => generateCode(37)).toThrow('length must not exceed 36 (charset size)');
+  });
+
+  it('throws RangeError for negative length', () => {
+    expect(() => generateCode(-1)).toThrow(RangeError);
+    expect(() => generateCode(-1)).toThrow('length must be greater than 0');
+  });
+
+  it('throws TypeError for non-integer values', () => {
+    expect(() => generateCode(2.5)).toThrow(TypeError);
+    expect(() => generateCode(2.5)).toThrow('length must be an integer');
+  });
+
+  it('throws TypeError for string input', () => {
+    expect(() => generateCode('5')).toThrow(TypeError);
+    expect(() => generateCode('5')).toThrow('length must be an integer');
+  });
+
+  it('throws TypeError for null input', () => {
+    expect(() => generateCode(null)).toThrow(TypeError);
+  });
+
+  it('throws TypeError for undefined input', () => {
+    expect(() => generateCode(undefined)).toThrow(TypeError);
+  });
 });
 
 describe('isValidCode', () => {
