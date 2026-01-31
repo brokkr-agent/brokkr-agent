@@ -43,9 +43,15 @@ Ask the user:
    - Optional arguments
    - Hint format (e.g., "<topic> [depth]")
 4. **Handler type** - How does it work?
-   - `claude` - Sends prompt to Claude
-   - `skill` - Invokes a Claude Code skill
-   - `internal` - Calls built-in function
+   - `claude` - Sends prompt to Claude (default category: `tasks`)
+   - `skill` - Invokes a Claude Code skill (default category: `skills`)
+   - `internal` - Calls built-in function (default category: `sessions`)
+5. **Category** - (Optional) Override for `/help` grouping:
+   - `tasks` - Task commands
+   - `sessions` - Session management
+   - `scheduling` - Scheduled tasks
+   - `skills` - Skill commands
+   - `help` - Help commands
 
 ### Step 3: Create Command Directory
 
@@ -57,12 +63,13 @@ mkdir -p .brokkr/commands/$0
 
 Based on handler type, create the appropriate definition:
 
-**For Claude type:**
+**For Claude type:** (default category: `tasks`)
 ```json
 {
   "name": "$0",
   "description": "<user-provided>",
   "aliases": [],
+  "category": "tasks",
   "priority": "CRITICAL",
   "source": "both",
   "arguments": {
@@ -81,11 +88,12 @@ Based on handler type, create the appropriate definition:
 }
 ```
 
-**For Skill type:**
+**For Skill type:** (default category: `skills`)
 ```json
 {
   "name": "$0",
   "description": "<user-provided>",
+  "category": "skills",
   "handler": {
     "type": "skill",
     "skill": "<skill-name>"
@@ -97,11 +105,12 @@ Based on handler type, create the appropriate definition:
 }
 ```
 
-**For Internal type:**
+**For Internal type:** (default category: `sessions`)
 ```json
 {
   "name": "$0",
   "description": "<user-provided>",
+  "category": "sessions",
   "handler": {
     "type": "internal",
     "function": "<handlerFunctionName>"
@@ -111,6 +120,8 @@ Based on handler type, create the appropriate definition:
   }
 }
 ```
+
+**Note:** The `category` field is optional. If omitted, it defaults based on handler type. Use explicit category to override (e.g., `"category": "scheduling"` for a claude-type command that schedules tasks).
 
 ### Step 5: Validate
 
@@ -195,7 +206,9 @@ Done! Command `/summarize` is ready. Try: `/summarize https://example.com short`
 Before completing:
 - [ ] Name follows pattern: lowercase, letters/numbers/hyphens, starts with letter
 - [ ] Description under 60 characters
+- [ ] Category is valid: tasks, sessions, scheduling, skills, or help
 - [ ] command.json is valid JSON
 - [ ] Schema validation passes
 - [ ] No conflicts with existing commands
 - [ ] Registration test passes
+- [ ] Command appears in correct `/help` category
