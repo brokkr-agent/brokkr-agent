@@ -116,36 +116,38 @@ Based on handler type, create the appropriate definition:
 
 Run validation:
 ```bash
-node -e "
-  import { validateCommand } from './lib/command-schema.js';
-  import { readFileSync } from 'fs';
-  const def = JSON.parse(readFileSync('./.brokkr/commands/$0/command.json'));
-  const result = validateCommand(def);
-  if (!result.valid) {
-    console.error('Validation failed:', result.errors);
-    process.exit(1);
-  }
-  console.log('Validation passed!');
+node --input-type=module -e "
+import { validateCommand } from './lib/command-schema.js';
+import { readFileSync } from 'fs';
+const def = JSON.parse(readFileSync('./.brokkr/commands/COMMAND_NAME/command.json'));
+const result = validateCommand(def);
+if (!result.valid) {
+  console.error('Validation failed:', result.errors);
+  process.exit(1);
+}
+console.log('Validation passed!');
 "
 ```
+(Replace COMMAND_NAME with the actual command name)
 
 ### Step 6: Test Registration
 
 ```bash
-node -e "
-  import { CommandRegistry } from './lib/command-registry.js';
-  const registry = new CommandRegistry();
-  registry.discover();
-  const cmd = registry.get('$0');
-  if (cmd) {
-    console.log('Command registered:', cmd.name);
-    console.log('Description:', cmd.description);
-  } else {
-    console.error('Registration failed!');
-    process.exit(1);
-  }
+node --input-type=module -e "
+import { CommandRegistry } from './lib/command-registry.js';
+const registry = new CommandRegistry();
+registry.discover();
+const cmd = registry.get('COMMAND_NAME');
+if (cmd) {
+  console.log('Command registered:', cmd.name);
+  console.log('Description:', cmd.description);
+} else {
+  console.error('Registration failed!');
+  process.exit(1);
+}
 "
 ```
+(Replace COMMAND_NAME with the actual command name)
 
 ## Argument Substitution Reference
 
