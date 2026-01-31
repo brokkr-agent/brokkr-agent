@@ -12,7 +12,10 @@ Interact with X.com using Chrome automation. Post tweets, read timelines, search
 
 ## Prerequisites
 - Chrome enabled (`--chrome` flag)
-- Logged into X.com as brokkrassist@icloud.com
+
+## Credentials (from CLAUDE.md)
+- **Email**: brokkrassist@icloud.com
+- **Password**: TommyismyMaster1!
 
 ## Instructions
 

@@ -12,7 +12,10 @@ Manage email via mail.icloud.com using Chrome automation.
 
 ## Prerequisites
 - Chrome enabled (`--chrome` flag)
-- Apple ID: brokkrassist@icloud.com (from CLAUDE.md)
+
+## Credentials (from CLAUDE.md)
+- **Apple ID**: brokkrassist@icloud.com
+- **Password**: TommyismyMaster1!
 
 ## Instructions
 

@@ -12,8 +12,13 @@ Work with GitHub repositories using Chrome and gh CLI.
 
 ## Prerequisites
 - Chrome enabled for web UI tasks
-- gh CLI authenticated (run `gh auth login` if needed)
 - Git configured as "Brokkr Assist" <brokkrassist@icloud.com>
+
+## Credentials (from CLAUDE.md)
+- **GitHub Username**: brokkr-agent
+- **Email**: brokkrassist@icloud.com
+- **Password**: TommyismyMaster1! (for web login via Chrome)
+- **Git push**: Requires Personal Access Token (PAT) - create via GitHub Settings if needed
 
 ## Instructions
 
