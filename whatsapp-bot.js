@@ -24,6 +24,16 @@ const SESSION_EXPIRY_INTERVAL_MS = 60 * 60 * 1000;
 const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // Queue processing interval: 1 second
 const QUEUE_PROCESS_INTERVAL_MS = 1000;
+// WhatsApp message character limit
+const WHATSAPP_MESSAGE_LIMIT = 4000;
+// Retry delay between send attempts (ms)
+const RETRY_DELAY_MS = 3000;
+// Message polling interval (ms)
+const POLLING_INTERVAL_MS = 2000;
+// Startup message delay (ms)
+const STARTUP_MESSAGE_DELAY_MS = 5000;
+// Fallback timeout for ready event (ms)
+const READY_FALLBACK_TIMEOUT_MS = 45000;
 
 // ============================================
 // Lock file management (single instance)
@@ -112,8 +122,8 @@ async function safeSendMessage(chatId, message, retries = 3) {
   // Add dry-run prefix if in dry-run mode
   const finalMessage = DRY_RUN ? `[DRY-RUN] ${message}` : message;
 
-  // Chunk long messages (WhatsApp limit ~4000 chars)
-  const MAX_LENGTH = 4000;
+  // Chunk long messages (WhatsApp limit)
+  const MAX_LENGTH = WHATSAPP_MESSAGE_LIMIT;
   const chunks = [];
   for (let i = 0; i < finalMessage.length; i += MAX_LENGTH) {
     chunks.push(finalMessage.slice(i, i + MAX_LENGTH));
@@ -126,7 +136,7 @@ async function safeSendMessage(chatId, message, retries = 3) {
         break; // Success, move to next chunk
       } catch (err) {
         console.error(`Send attempt ${i + 1} failed:`, err.message);
-        if (i < retries - 1) await new Promise(r => setTimeout(r, 3000));
+        if (i < retries - 1) await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
         else throw new Error('Failed to send after all retries');
       }
     }
@@ -202,7 +212,7 @@ async function pollForMessages() {
       }
 
       if (lastMsg && lastMsg.id._serialized !== lastMessageId && lastMsg.fromMe) {
-        const text = lastMsg.body.trim();
+        const text = (lastMsg.body || '').trim();
 
         // Skip bot responses (they start with these patterns)
         if (text.startsWith('[DRY-RUN]') ||
@@ -444,6 +454,7 @@ let readyFired = false;
 let botStarted = false;
 let queueInterval = null;
 let sessionExpiryInterval = null;
+let pollingInterval = null;
 
 async function startBot() {
   if (botStarted) return;
@@ -455,7 +466,7 @@ async function startBot() {
   console.log('Commands: /claude, /help, /status, /sessions, /research, /github, /x, /youtube, /email, /schedule\n');
 
   // Start polling for messages
-  setInterval(pollForMessages, 2000);
+  pollingInterval = setInterval(pollForMessages, POLLING_INTERVAL_MS);
 
   // Start queue processing interval (every 1 second)
   queueInterval = setInterval(processQueue, QUEUE_PROCESS_INTERVAL_MS);
@@ -468,7 +479,7 @@ async function startBot() {
     }
   }, SESSION_EXPIRY_INTERVAL_MS);
 
-  // Send startup message
+  // Send startup message after delay
   setTimeout(async () => {
     try {
       const myId = client.info?.wid?._serialized;
@@ -482,7 +493,7 @@ async function startBot() {
     } catch (err) {
       console.log('Startup message skipped (library still initializing)');
     }
-  }, 5000);
+  }, STARTUP_MESSAGE_DELAY_MS);
 }
 
 client.on('ready', () => {
@@ -504,7 +515,7 @@ client.on('authenticated', () => {
       console.log('Ready event did not fire, using fallback');
       startBot();
     }
-  }, 45000);
+  }, READY_FALLBACK_TIMEOUT_MS);
 });
 
 // ============================================
@@ -515,6 +526,7 @@ function cleanup() {
   console.log('\nShutting down...');
 
   // Clear intervals
+  if (pollingInterval) clearInterval(pollingInterval);
   if (queueInterval) clearInterval(queueInterval);
   if (sessionExpiryInterval) clearInterval(sessionExpiryInterval);
 
@@ -548,6 +560,13 @@ process.on('exit', () => {
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   console.error('Uncaught exception:', err);
+  cleanup();
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled rejection at:', promise, 'reason:', reason);
   cleanup();
   process.exit(1);
 });
