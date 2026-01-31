@@ -204,15 +204,33 @@ async function pollForMessages() {
     }
 
     if (selfChat && myId) {
-      const messages = await selfChat.fetchMessages({ limit: 1 });
-      const lastMsg = messages[0];
+      // Fetch multiple messages to catch rapid commands
+      const messages = await selfChat.fetchMessages({ limit: 10 });
 
-      if (DEBUG && lastMsg) {
-        console.log(`[Poll #${pollCount}] Last msg: "${lastMsg.body?.slice(0, 30)}..." fromMe: ${lastMsg.fromMe}, isNew: ${lastMsg.id._serialized !== lastMessageId}`);
+      if (DEBUG && messages.length > 0) {
+        console.log(`[Poll #${pollCount}] Fetched ${messages.length} messages, lastMessageId: ${lastMessageId?.slice(-8) || 'none'}`);
       }
 
-      if (lastMsg && lastMsg.id._serialized !== lastMessageId && lastMsg.fromMe) {
-        const text = (lastMsg.body || '').trim();
+      // Process messages oldest-first to maintain order
+      // messages[0] is newest, so reverse to process oldest first
+      const orderedMessages = [...messages].reverse();
+
+      // Find where to start processing (after lastMessageId)
+      let foundLast = !lastMessageId; // If no lastMessageId, process all
+      const toProcess = [];
+
+      for (const msg of orderedMessages) {
+        if (!foundLast) {
+          if (msg.id._serialized === lastMessageId) {
+            foundLast = true;
+          }
+          continue;
+        }
+
+        // Only process our own messages (self-chat)
+        if (!msg.fromMe) continue;
+
+        const text = (msg.body || '').trim();
 
         // Skip bot responses (they start with these patterns)
         if (text.startsWith('[DRY-RUN]') ||
@@ -225,27 +243,35 @@ async function pollForMessages() {
             text.startsWith('Resuming session') ||
             text.startsWith('Active Sessions:') ||
             text.startsWith('No active sessions')) {
-          lastMessageId = lastMsg.id._serialized;
           if (DEBUG) console.log('[Skip] Bot response detected');
-          return;
+          continue;
         }
 
         // Skip help text output
         if (text.includes('/claude <task>') && text.includes('/help')) {
-          lastMessageId = lastMsg.id._serialized;
           if (DEBUG) console.log('[Skip] Help text detected');
-          return;
+          continue;
         }
 
         // Only process messages starting with /
         if (text.startsWith('/')) {
-          lastMessageId = lastMsg.id._serialized;
-          console.log(`\n[${new Date().toISOString()}] Received: "${text}"`);
-
-          await handleCommand(text, myId);
-        } else if (lastMsg.id._serialized !== lastMessageId) {
-          lastMessageId = lastMsg.id._serialized;
+          toProcess.push({ msg, text });
         }
+      }
+
+      // Update lastMessageId to newest message
+      if (messages.length > 0) {
+        lastMessageId = messages[0].id._serialized;
+      }
+
+      // Process all new commands
+      for (const { msg, text } of toProcess) {
+        console.log(`\n[${new Date().toISOString()}] Received: "${text}"`);
+        await handleCommand(text, myId);
+      }
+
+      if (DEBUG && toProcess.length > 0) {
+        console.log(`[Poll #${pollCount}] Processed ${toProcess.length} commands`);
       }
     }
   } catch (err) {
