@@ -89,6 +89,34 @@ describe('busy-handler', () => {
 
       expect(message).toContain('will be prioritized once complete');
     });
+
+    it('throws TypeError when queuePosition is a string', () => {
+      getCurrentTask.mockReturnValue('Some task');
+
+      expect(() => getBusyMessage('invalid')).toThrow(TypeError);
+      expect(() => getBusyMessage('invalid')).toThrow('queuePosition must be null or a number');
+    });
+
+    it('throws TypeError when queuePosition is an object', () => {
+      getCurrentTask.mockReturnValue('Some task');
+
+      expect(() => getBusyMessage({})).toThrow(TypeError);
+    });
+
+    it('throws TypeError when queuePosition is NaN', () => {
+      getCurrentTask.mockReturnValue('Some task');
+
+      expect(() => getBusyMessage(NaN)).toThrow(TypeError);
+    });
+
+    it('treats negative queuePosition as 0 (prioritized message)', () => {
+      getCurrentTask.mockReturnValue('Some task');
+
+      const message = getBusyMessage(-5);
+
+      expect(message).toContain('will be prioritized once complete');
+      expect(message).not.toContain('queued');
+    });
   });
 
   describe('shouldSendBusyMessage', () => {
@@ -131,7 +159,7 @@ describe('busy-handler', () => {
       expect(message).toContain('Queue: 2 pending');
     });
 
-    it('includes current task when processing', () => {
+    it('includes current task when processing without ellipsis for short tasks', () => {
       isProcessing.mockReturnValue(true);
       getCurrentTask.mockReturnValue('Working on something important');
       getQueueDepth.mockReturnValue(1);
@@ -140,9 +168,11 @@ describe('busy-handler', () => {
       const message = getStatusMessage();
 
       expect(message).toContain('Current: Working on something important');
+      // Should not have trailing ... for short tasks
+      expect(message).not.toContain('Working on something important...');
     });
 
-    it('truncates current task to 50 characters', () => {
+    it('truncates current task to 50 characters with ellipsis when longer', () => {
       const longTask = 'This is a very long task description that exceeds fifty characters limit by a lot';
       isProcessing.mockReturnValue(true);
       getCurrentTask.mockReturnValue(longTask);
@@ -152,6 +182,19 @@ describe('busy-handler', () => {
       const message = getStatusMessage();
 
       expect(message).toContain(`Current: ${longTask.slice(0, 50)}...`);
+    });
+
+    it('does not add ellipsis when task is exactly 50 characters', () => {
+      const exactTask = '12345678901234567890123456789012345678901234567890'; // exactly 50 chars
+      isProcessing.mockReturnValue(true);
+      getCurrentTask.mockReturnValue(exactTask);
+      getQueueDepth.mockReturnValue(0);
+      getCurrentSessionCode.mockReturnValue(null);
+
+      const message = getStatusMessage();
+
+      expect(message).toContain(`Current: ${exactTask}`);
+      expect(message).not.toContain('...');
     });
 
     it('includes session code when processing with active session', () => {
