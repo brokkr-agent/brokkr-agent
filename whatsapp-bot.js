@@ -1,194 +1,188 @@
+// whatsapp-bot.js
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
-import { spawn } from 'child_process';
 import qrcode from 'qrcode-terminal';
 
-const WORKSPACE = process.cwd();
+import { enqueue, getPendingJobs } from './lib/queue.js';
+import { processQueue, setSendMessageCallback } from './lib/worker.js';
+import { startHeartbeat, incrementProcessed, incrementFailed } from './lib/heartbeat.js';
+import { info, warn, error, success } from './lib/logger.js';
+import { getSession, updateSession, endSession } from './lib/sessions.js';
 
-// Step 2: Pin WhatsApp Web version to avoid compatibility issues
+const WORKSPACE = process.cwd();
+const POLL_INTERVAL_MS = 2000;
+const QUEUE_PROCESS_INTERVAL_MS = 1000;
+
+// WhatsApp Client
 const client = new Client({
   authStrategy: new LocalAuth(),
   webVersionCache: {
     type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/AaronLuz/whatsapp-versions/main/html/2.3000.1031490220-alpha.html'
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1032721183-alpha.html'
   },
   puppeteer: {
-    headless: false,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
   },
 });
 
-// Safe send message with retry logic and sendSeen: false
-async function safeSendMessage(client, chatId, message, retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await client.sendMessage(chatId, message, { sendSeen: false });
-    } catch (err) {
-      console.error(`Send attempt ${i + 1} failed:`, err.message);
-      if (i < retries - 1) await new Promise(r => setTimeout(r, 3000));
-    }
+// Safe send with retry
+async function safeSendMessage(chatId, message, retries = 3) {
+  const MAX_LENGTH = 4000;
+  const chunks = [];
+
+  for (let i = 0; i < message.length; i += MAX_LENGTH) {
+    chunks.push(message.slice(i, i + MAX_LENGTH));
   }
-  throw new Error('Failed to send after all retries');
+
+  for (const chunk of chunks) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await client.sendMessage(chatId, chunk, { sendSeen: false });
+        return;
+      } catch (err) {
+        warn('WhatsApp', `Send attempt ${i + 1} failed`, { error: err.message });
+        if (i < retries - 1) await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+    throw new Error('Failed to send after all retries');
+  }
 }
 
+// Set up worker callback
+setSendMessageCallback(safeSendMessage);
+
+// Message tracking
+let lastMessageId = null;
+
+async function pollForMessages() {
+  try {
+    const chats = await client.getChats();
+    const myId = client.info?.wid?._serialized;
+    const selfChat = chats.find(c => c.id._serialized === myId);
+
+    if (!selfChat || !myId) return;
+
+    const messages = await selfChat.fetchMessages({ limit: 5 });
+
+    for (const msg of messages.reverse()) {
+      if (msg.id._serialized === lastMessageId) continue;
+      if (!msg.fromMe) continue;
+
+      const text = msg.body.trim();
+      lastMessageId = msg.id._serialized;
+
+      // Handle /claude - one-shot task
+      if (text.toLowerCase().startsWith('/claude ')) {
+        const task = text.slice(8).trim();
+        if (task) {
+          const jobId = enqueue({ type: 'oneshot', task, chatId: myId });
+          info('Queue', `Enqueued job ${jobId}`, { task: task.slice(0, 50) });
+          await safeSendMessage(myId, `Queued: ${task.slice(0, 100)}...`);
+        }
+      }
+
+      // Handle /chat - session-based conversation
+      else if (text.toLowerCase().startsWith('/chat ')) {
+        const message = text.slice(6).trim();
+        if (message) {
+          const session = getSession(myId);
+          const jobId = enqueue({
+            type: 'chat',
+            task: message,
+            chatId: myId,
+            sessionId: session?.sessionId || null
+          });
+          info('Queue', `Enqueued chat job ${jobId}`, { hasSession: !!session });
+        }
+      }
+
+      // Handle /endchat - end session
+      else if (text.toLowerCase() === '/endchat') {
+        endSession(myId);
+        await safeSendMessage(myId, 'Session ended.');
+        info('Session', 'Session ended by user');
+      }
+
+      // Handle /status - bot status
+      else if (text.toLowerCase() === '/status') {
+        const pending = getPendingJobs().length;
+        await safeSendMessage(myId, `Bot online. ${pending} jobs pending.`);
+      }
+    }
+  } catch (err) {
+    // Ignore polling errors - will retry
+  }
+}
+
+// Event handlers
 client.on('qr', qr => {
-  console.log('\n📱 Scan this QR code with WhatsApp:\n');
+  console.log('\nScan this QR code with WhatsApp:\n');
   qrcode.generate(qr, { small: true });
 });
 
 client.on('loading_screen', (percent, message) => {
-  console.log('Loading:', percent + '%', message);
+  info('WhatsApp', `Loading: ${percent}%`, { message });
 });
 
 client.on('authenticated', () => {
-  console.log('✅ Authenticated!');
+  success('WhatsApp', 'Authenticated');
 });
 
 client.on('auth_failure', msg => {
-  console.error('❌ Auth failure:', msg);
+  error('WhatsApp', 'Auth failure', { message: msg });
+  process.exit(1);
 });
 
-// Polling fallback - check for new messages every 2 seconds
-let lastMessageId = null;
-let isProcessing = false;
+client.on('disconnected', (reason) => {
+  error('WhatsApp', 'Disconnected', { reason });
+  process.exit(1);
+});
 
-async function pollForMessages() {
-  if (isProcessing) return;
+client.on('ready', async () => {
+  success('WhatsApp', 'Ready');
+  info('Bot', `Workspace: ${WORKSPACE}`);
 
+  // Start systems
+  startHeartbeat();
+
+  // Poll for messages
+  setInterval(pollForMessages, POLL_INTERVAL_MS);
+
+  // Process queue
+  setInterval(processQueue, QUEUE_PROCESS_INTERVAL_MS);
+
+  // Startup notification
   try {
-    const chats = await client.getChats();
-    // Find "message yourself" chat - try @lid first for reading, but send to @c.us
-    const selfChat = chats.find(c => c.id._serialized.endsWith('@lid'));
-    const myId = client.info?.wid?._serialized; // @c.us ID for sending
-
-    if (selfChat && myId) {
-      const messages = await selfChat.fetchMessages({ limit: 1 });
-      const lastMsg = messages[0];
-
-      if (lastMsg && lastMsg.id._serialized !== lastMessageId && lastMsg.fromMe) {
-        const text = lastMsg.body.trim();
-
-        // Only process messages starting with /claude
-        if (text.toLowerCase().startsWith('/claude ')) {
-          lastMessageId = lastMsg.id._serialized;
-          const task = text.slice(8).trim(); // Remove "/claude "
-
-          if (task) {
-            isProcessing = true;
-            console.log(`\n📨 Task: "${task}"`);
-            console.log(`📂 Working dir: ${WORKSPACE}\n`);
-
-            try {
-              await safeSendMessage(client, myId, '🚀 Starting Claude Code...');
-            } catch (e) {
-              console.log('⚠️ Could not send start message:', e.message);
-            }
-
-            console.log(`⚙️  Running: claude -p "${task}" --dangerously-skip-permissions\n`);
-
-            const child = spawn('claude', ['-p', task, '--dangerously-skip-permissions'], {
-              cwd: WORKSPACE,
-              env: { ...process.env, FORCE_COLOR: '0' },
-              stdio: ['ignore', 'pipe', 'pipe'] // Close stdin, capture stdout/stderr
-            });
-
-            let stdout = '';
-            let stderr = '';
-
-            child.stdout.on('data', (data) => {
-              stdout += data.toString();
-            });
-
-            child.stderr.on('data', (data) => {
-              stderr += data.toString();
-            });
-
-            child.on('close', async (code) => {
-              console.log('📥 Command finished with code:', code);
-
-              let result = stdout || stderr || 'Done (no output)';
-              result = result.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-
-              console.log('📤 Result preview:', result.slice(0, 300));
-
-              try {
-                const MAX_LENGTH = 4000;
-                if (result.length > MAX_LENGTH) {
-                  for (let i = 0; i < result.length; i += MAX_LENGTH) {
-                    await safeSendMessage(client, myId, result.slice(i, i + MAX_LENGTH));
-                  }
-                } else {
-                  await safeSendMessage(client, myId, result);
-                }
-                console.log('✅ Sent response to WhatsApp');
-              } catch (sendErr) {
-                console.error('❌ Failed to send response:', sendErr.message);
-              }
-
-              isProcessing = false;
-            });
-
-            child.on('error', (err) => {
-              console.error('❌ Spawn error:', err.message);
-              isProcessing = false;
-            });
-          }
-        } else if (lastMsg.id._serialized !== lastMessageId) {
-          lastMessageId = lastMsg.id._serialized;
-        }
-      }
+    const myId = client.info?.wid?._serialized;
+    if (myId) {
+      await safeSendMessage(myId, 'Bot online. Send /claude <task> or /chat <message>');
     }
   } catch (err) {
-    // Ignore errors during polling
+    warn('WhatsApp', 'Could not send startup message');
   }
-}
-
-// Step 4: Track ready state for fallback logic
-let readyFired = false;
-let botStarted = false;
-
-async function startBot() {
-  if (botStarted) return;
-  botStarted = true;
-
-  console.log('📡 Starting message polling...');
-  console.log('💬 Send /claude <task> to yourself to run Claude Code\n');
-
-  // Start polling immediately - don't block on startup message
-  setInterval(pollForMessages, 2000);
-
-  // Try to send startup message in background (non-blocking)
-  setTimeout(async () => {
-    try {
-      const myId = client.info?.wid?._serialized;
-      if (myId) {
-        await client.sendMessage(myId, '🤖 Bot is online! Send /claude <task> to run Claude Code.', { sendSeen: false });
-        console.log('✅ Sent startup message');
-      }
-    } catch (err) {
-      console.log('ℹ️ Startup message skipped (library still initializing)');
-    }
-  }, 5000);
-}
-
-client.on('ready', () => {
-  readyFired = true;
-  console.log('\n✅ WhatsApp READY!');
-  console.log('📍 Workspace:', WORKSPACE);
-  console.log('\n💬 Send a message starting with /claude to trigger Claude Code');
-  console.log('   Example: /claude list files in this project\n');
-  startBot();
 });
 
-// Fallback if ready event doesn't fire (wait 45s for full initialization)
-client.on('authenticated', () => {
-  setTimeout(() => {
-    if (!readyFired && client.info) {
-      console.log('⚠️ Ready event did not fire, using fallback');
-      startBot();
-    }
-  }, 45000);
+// Error handlers
+process.on('uncaughtException', (err) => {
+  error('Process', 'Uncaught exception', { error: err.message });
+  process.exit(1);
 });
 
-console.log('🔄 Starting WhatsApp bot...\n');
+process.on('unhandledRejection', (reason) => {
+  error('Process', 'Unhandled rejection', { reason: String(reason) });
+  process.exit(1);
+});
+
+process.on('SIGTERM', () => {
+  info('Process', 'Received SIGTERM');
+  client.destroy().then(() => process.exit(0));
+});
+
+process.on('SIGINT', () => {
+  info('Process', 'Received SIGINT');
+  client.destroy().then(() => process.exit(0));
+});
+
+info('Bot', 'Starting WhatsApp bot (24/7 mode)');
 client.initialize();

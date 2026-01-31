@@ -12,3 +12,9 @@ dist/
 .gemini/
 .opencode/
 .agents/
+
+# Ephemeral state files
+heartbeat.json
+jobs/**/*.json
+sessions/*.json
+data/task-patterns.json
