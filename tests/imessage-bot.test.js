@@ -820,4 +820,140 @@ describe('imessage-bot', () => {
       expect(sentMessages[0].msg).toContain('Bot Status');
     });
   });
+
+  describe('processCommand - consultation flow', () => {
+    // Clear queue and sessions between tests
+    beforeEach(async () => {
+      const queueModule = await import('../lib/queue.js');
+      const sessionsModule = await import('../lib/sessions.js');
+      const pendingModule = await import('../lib/imessage-pending.js');
+      queueModule.clearQueue();
+      sessionsModule.clearSessions();
+      pendingModule.clearPending();
+    });
+
+    it('sends consultation to Tommy for untrusted contact with natural message', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Untrusted contact sends a natural (non-command) message
+      const result = await imessageBotModule.processCommand({
+        text: 'What is the weather today?',
+        phoneNumber: '+15551234567',
+        sendMessage: mockSend,
+        contact: {
+          id: '+15551234567',
+          display_name: 'Unknown Caller',
+          trust_level: 'not_trusted'
+        },
+        treatAsNatural: true  // Flag indicating this is a natural message, not a command
+      });
+
+      // Should return consultation_pending type
+      expect(result.type).toBe('consultation_pending');
+      expect(result.phoneNumber).toBe('+15551234567');
+
+      // Message should be sent to Tommy (+12069090025)
+      const tommyMessage = sentMessages.find(m => m.phone === '+12069090025');
+      expect(tommyMessage).toBeDefined();
+      expect(tommyMessage.msg).toContain('asked:');
+    });
+
+    it('processes directly for trusted contacts with natural message', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Trusted contact sends a natural (non-command) message
+      const result = await imessageBotModule.processCommand({
+        text: 'What is the weather today?',
+        phoneNumber: '+15551234567',
+        sendMessage: mockSend,
+        contact: {
+          id: '+15551234567',
+          display_name: 'Trusted Friend',
+          trust_level: 'trusted'
+        },
+        treatAsNatural: true
+      });
+
+      // Should NOT be a consultation - trusted contacts bypass consultation
+      expect(result.type).not.toBe('consultation_pending');
+
+      // For now, natural messages from trusted contacts are passed through
+      // as 'not_command' - full natural language processing is a future enhancement
+      // The key test is that NO message went to Tommy for consultation
+      expect(sentMessages.every(m => m.phone !== '+12069090025')).toBe(true);
+    });
+
+    it('skips consultation for command messages from untrusted contacts', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Untrusted contact sends a command (starts with /)
+      const result = await imessageBotModule.processCommand({
+        text: '/help',
+        phoneNumber: '+15551234567',
+        sendMessage: mockSend,
+        contact: {
+          id: '+15551234567',
+          trust_level: 'not_trusted'
+        },
+        treatAsNatural: false
+      });
+
+      // Commands should be processed normally, not consulted
+      expect(result.type).toBe('help');
+    });
+
+    it('skips consultation for Tommy regardless of treatAsNatural flag', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends a natural message
+      const result = await imessageBotModule.processCommand({
+        text: 'What is the weather today?',
+        phoneNumber: '+12069090025',  // Tommy's number
+        sendMessage: mockSend,
+        contact: {
+          id: '+12069090025',
+          trust_level: 'trusted'
+        },
+        treatAsNatural: true
+      });
+
+      // Should NOT be a consultation for Tommy
+      expect(result.type).not.toBe('consultation_pending');
+    });
+
+    it('skips consultation for ignored contacts', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Ignored contact sends a natural message
+      const result = await imessageBotModule.processCommand({
+        text: 'Hello there!',
+        phoneNumber: '+15551234567',
+        sendMessage: mockSend,
+        contact: {
+          id: '+15551234567',
+          trust_level: 'not_trusted',
+          ignore: true
+        },
+        treatAsNatural: true
+      });
+
+      // Should NOT trigger consultation for ignored contacts
+      expect(result.type).not.toBe('consultation_pending');
+    });
+  });
 });

@@ -28,6 +28,7 @@ import { createSession, getSessionByCode, listSessions, expireSessions } from '.
 import { processNextJob, setSendMessageCallback, setDryRunMode, isProcessing, getCurrentSessionCode } from './lib/worker.js';
 import { startupCleanup } from './lib/resources.js';
 import { getBusyMessage, getStatusMessage } from './lib/busy-handler.js';
+import { shouldConsultTommy, sendConsultation } from './lib/imessage-consultation.js';
 
 // Configuration constants
 export const TOMMY_PHONE = '+12069090025';
@@ -236,13 +237,28 @@ function getSessionAge(createdAt) {
  * @param {string} options.phoneNumber - Phone number to send response to
  * @param {Function} options.sendMessage - Function to send messages (for testing)
  * @param {Object} options.contact - Optional contact object for permission checking
+ * @param {boolean} options.treatAsNatural - If true, treat non-command as natural message (enables consultation)
  * @returns {Promise<Object>} Result object with type and details
  */
 export async function processCommand(options) {
-  const { text, phoneNumber, sendMessage = (phone, msg) => safeSendMessage(phone, msg, { dryRun: DRY_RUN }), contact = null } = options;
+  const { text, phoneNumber, sendMessage = (phone, msg) => safeSendMessage(phone, msg, { dryRun: DRY_RUN }), contact = null, treatAsNatural = false } = options;
 
   // Check if sender is Tommy - only Tommy gets session codes
   const isTommy = isTommyMessage(phoneNumber);
+
+  // Consultation check for natural messages from untrusted contacts
+  // Only applies when treatAsNatural is true and message doesn't start with /
+  if (treatAsNatural && !text.startsWith('/') && !isTommy && contact) {
+    if (shouldConsultTommy(contact, text)) {
+      // Build display name for the consultation message
+      const contactName = contact.display_name || phoneNumber;
+
+      // Send consultation to Tommy with formatted message
+      await sendMessage(TOMMY_PHONE, `${contactName} asked:\n\n"${text}"`);
+
+      return { type: 'consultation_pending', phoneNumber };
+    }
+  }
 
   const parsed = parseMessage(text);
   console.log(`Parsed type: ${parsed.type}`);
