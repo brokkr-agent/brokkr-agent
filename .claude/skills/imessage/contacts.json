@@ -1,1 +1,20 @@
-{}
+{
+  "+12069090025": {
+    "id": "+12069090025",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": "Tommy",
+    "trust_level": "trusted",
+    "permissions": {},
+    "command_permissions": ["*"],
+    "denied_requests": [],
+    "approved_requests": [],
+    "response_style": null,
+    "topics_discussed": [],
+    "sentiment_history": null,
+    "spam_score": 0,
+    "ignore": false,
+    "first_seen": "2026-02-01T00:00:00Z",
+    "last_interaction": "2026-02-01T00:00:00Z"
+  }
+}
