@@ -32,7 +32,7 @@
 | Reminders | ✅ Full | Verified | 1 list found |
 | Notes | ✅ Full | Verified | 1 folder found |
 | Contacts | ✅ Full | Researched | Full dictionary available |
-| Safari | ✅ Full | Researched | + UI scripting |
+| Chrome | ✅ Configured | In Use | Primary browser, skill needs build |
 | Finder | ✅ Full | Researched | Scriptable + recordable |
 | Shortcuts | ✅ Full | Researched | Via Shortcuts Events |
 | Music | ✅ Full | Researched | Renamed from iTunes |
@@ -152,14 +152,16 @@ skills/
     update-contact.scpt   # Modify existing contact
     list-groups.scpt      # List contact groups
 
-  safari/
+  chrome/
     skill.md
-    open-url.scpt         # Open URL in Safari
-    get-current-url.scpt  # Get URL of active tab
-    get-page-content.scpt # Extract page text content
-    run-javascript.scpt   # Execute JS in current page
-    list-tabs.scpt        # List all open tabs
-    close-tab.scpt        # Close specific tab
+    open-url.js           # Open URL in Chrome (Puppeteer)
+    get-current-url.js    # Get URL of active tab
+    get-page-content.js   # Extract page text content
+    run-javascript.js     # Execute JS in current page
+    screenshot.js         # Capture page screenshot
+    fill-form.js          # Fill form fields
+    click-element.js      # Click element by selector
+    wait-for.js           # Wait for element/navigation
 
   finder/
     skill.md
@@ -419,47 +421,42 @@ tell application "Contacts"
 end tell
 ```
 
-## Safari Integration
+## Chrome Browser Skill
 
-Browser automation as backup to Chrome, bookmark management, and web scraping.
+Chrome is already configured for browser automation. This skill formalizes the patterns for efficient agent use.
+
+### Current Setup
+
+- Chrome installed and running in visible mode
+- Used by WhatsApp bot (whatsapp-web.js)
+- Available for general web automation tasks
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
-| `/safari <url>` | Open URL in Safari |
-| `/safari tabs` | List open tabs |
-| `/safari js <code>` | Run JavaScript in current page |
+| `/browse <url>` | Open URL in Chrome |
+| `/browse screenshot` | Capture current page |
+| `/browse fill <selector> <value>` | Fill form field |
+| `/browse click <selector>` | Click element |
 
-### Use Cases
+### Skill Requirements (To Build)
 
-- Web automation when Chrome unavailable
-- Reading list management
-- Bookmark organization
-- Quick URL opening from commands
+The Chrome skill should provide reusable patterns for:
 
-### AppleScript Examples
+1. **Page Navigation** - Open URLs, wait for load, handle redirects
+2. **Content Extraction** - Get page text, extract structured data
+3. **Form Interaction** - Fill fields, submit forms, handle dropdowns
+4. **Authentication** - Login flows, session management
+5. **Screenshot/Recording** - Capture pages, record flows
+6. **Error Handling** - Retry logic, timeout handling, CAPTCHA detection
 
-```applescript
--- Open URL and wait for load
-tell application "Safari"
-    activate
-    open location "https://brokkr.co"
-    delay 2
-    set pageContent to do JavaScript "document.body.innerText" in current tab of front window
-end tell
+### Integration Notes
 
--- Get all tab URLs
-tell application "Safari"
-    set tabList to {}
-    repeat with w in windows
-        repeat with t in tabs of w
-            set end of tabList to URL of t
-        end repeat
-    end repeat
-    return tabList
-end tell
-```
+- Chrome is shared with WhatsApp bot - coordinate access
+- Use Puppeteer for programmatic control
+- Visible Chrome allows manual intervention if needed
+- Keep sessions separate to avoid conflicts
 
 ## Finder & File Management
 
@@ -692,7 +689,7 @@ If any command fails with "not authorized", re-check the Automation permissions 
 
 ### Phase 4 - Apple Apps (Extended)
 11. Contacts skill
-12. Safari skill
+12. Chrome skill (formalize existing setup)
 13. Finder/Spotlight skill
 14. Clipboard skill
 15. Music skill
@@ -773,11 +770,11 @@ If any command fails with "not authorized", re-check the Automation permissions 
 - Access to all fields: name, email, phone, address, notes
 - Contact groups supported
 
-### Safari ✅
-- Full AppleScript dictionary + UI scripting
-- Can open URLs, get page content, run JavaScript
-- Tab management supported
-- Good backup to Chrome for web automation
+### Chrome ✅ (In Use)
+- Already configured for WhatsApp bot
+- Puppeteer available for programmatic control
+- Visible mode allows manual intervention
+- Skill needs to be formalized for efficient agent use
 
 ### Finder ✅
 - Fully scriptable and recordable
