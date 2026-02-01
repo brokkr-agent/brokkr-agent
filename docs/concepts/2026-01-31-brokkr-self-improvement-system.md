@@ -584,6 +584,69 @@ During idle time:
 - Check for stale processes
 - Update CLAUDE.md with learnings
 
+### Directory CLAUDE.md Documentation (Task 30)
+
+Create and maintain `CLAUDE.md` files in each key directory explaining:
+
+1. **Purpose** - What the directory contains and why it exists
+2. **Patterns** - How components are structured and expected to work together
+3. **Reusability** - How to use existing utilities when building new features
+4. **Updates** - When and how to update the documentation as patterns evolve
+
+**Target Directories:**
+
+| Directory | Purpose |
+|-----------|---------|
+| `lib/` | Shared libraries - queue, sessions, notifications, etc. |
+| `scripts/` | Operational scripts - bot control, testing, utilities |
+| `data/` | Runtime data - sessions, learning feedback, state |
+| `.claude/skills/` | Skill packages - structure, required files, examples |
+| `.claude/agents/` | Subagent definitions - format, capabilities |
+| `.claude/commands/` | Slash commands - format, linking to skills |
+| `docs/plans/` | Implementation plans - sprint format, task structure |
+| `docs/concepts/` | Brainstorming docs - research requirements, workflow |
+| `tests/` | Test files - patterns, mocking, coverage expectations |
+
+**Documentation Format:**
+
+Each `CLAUDE.md` should be concise (under 200 lines) and include:
+
+```markdown
+# [Directory Name]
+
+## Purpose
+One paragraph explaining what this directory contains.
+
+## Structure
+Brief overview of subdirectories/file organization.
+
+## Patterns
+
+### [Pattern Name]
+- When to use this pattern
+- Example code/reference
+- Related files
+
+## Adding New [Items]
+1. Step-by-step checklist
+2. Required elements
+3. Where to update references
+
+## Related
+- Link to architecture doc
+- Link to relevant concept/plan docs
+```
+
+**Self-Updating Rule:**
+
+When Brokkr adds new code to a directory, it MUST:
+1. Check if the directory has a `CLAUDE.md`
+2. If yes, verify the change follows documented patterns
+3. If the change introduces a new pattern, update the `CLAUDE.md`
+4. If no `CLAUDE.md` exists for a key directory, create one
+
+This ensures institutional knowledge grows with the codebase.
+
 ## Implementation Phases
 
 ### Phase 0 - macOS System Setup ✅ COMPLETE
@@ -715,11 +778,12 @@ If any command fails with "not authorized", re-check the Automation permissions 
 27. Urgency learning system
 28. Self-maintenance routines
 29. Pattern detection and shortcuts
+30. Directory CLAUDE.md documentation system
 
 ### Phase 9 - Refinement
-30. Morning briefing automation
-31. Cross-skill workflows
-32. Adaptive optimization
+31. Morning briefing automation
+32. Cross-skill workflows
+33. Adaptive optimization
 
 ## Research Required Before Implementation
 
