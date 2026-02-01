@@ -1339,4 +1339,280 @@ describe('imessage-bot', () => {
       expect(response).toContain('7 days');
     });
   });
+
+  describe('pollMessages - universal access mode', () => {
+    // These tests verify the pollMessages function behavior with --universal flag
+    // Note: We need to test the exported constants and behavior
+
+    it('exports UNIVERSAL_ACCESS flag detection (default false when no --universal flag)', async () => {
+      // UNIVERSAL_ACCESS should be false by default (no --universal in process.argv)
+      // This test verifies the flag is exported and accessible
+      expect(imessageBotModule).not.toBeNull();
+
+      // The module should export UNIVERSAL_ACCESS constant
+      // It should be false when --universal is not in process.argv
+      expect(typeof imessageBotModule.UNIVERSAL_ACCESS).toBe('boolean');
+      expect(imessageBotModule.UNIVERSAL_ACCESS).toBe(false);
+    });
+
+    it('exports pollMessages function', async () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(typeof imessageBotModule.pollMessages).toBe('function');
+    });
+
+    it('exports pollMessagesWithDeps for testable polling', async () => {
+      // pollMessagesWithDeps accepts dependencies for testing
+      expect(imessageBotModule).not.toBeNull();
+      expect(typeof imessageBotModule.pollMessagesWithDeps).toBe('function');
+    });
+
+    describe('pollMessagesWithDeps behavior', () => {
+      let mockGetRecentMessages;
+      let mockGetAllRecentMessages;
+      let mockGetOrCreateContact;
+      let mockProcessCommand;
+      let processedIds;
+
+      beforeEach(() => {
+        processedIds = new Set();
+        mockGetRecentMessages = jest.fn().mockReturnValue([]);
+        mockGetAllRecentMessages = jest.fn().mockReturnValue([]);
+        mockGetOrCreateContact = jest.fn().mockReturnValue({
+          id: '+15551234567',
+          trust_level: 'not_trusted',
+          command_permissions: []
+        });
+        mockProcessCommand = jest.fn().mockResolvedValue({ type: 'test' });
+      });
+
+      it('uses getRecentMessages when universalAccess is false', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: false,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        expect(mockGetRecentMessages).toHaveBeenCalledWith('+12069090025', 20);
+        expect(mockGetAllRecentMessages).not.toHaveBeenCalled();
+      });
+
+      it('uses getAllRecentMessages when universalAccess is true', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: true,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        expect(mockGetAllRecentMessages).toHaveBeenCalledWith(50);
+        expect(mockGetRecentMessages).not.toHaveBeenCalled();
+      });
+
+      it('passes universalAccess option to filterNewMessages', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        // Provide a message that would be filtered out in non-universal mode
+        mockGetAllRecentMessages.mockReturnValue([
+          { id: 1, text: 'Hello there!', sender: '+15551234567', timestamp: 1000 }
+        ]);
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: true,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        // The message should be processed (not filtered) because universalAccess is true
+        expect(mockProcessCommand).toHaveBeenCalled();
+      });
+
+      it('calls getOrCreateContact for each message sender in universal mode', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        mockGetAllRecentMessages.mockReturnValue([
+          { id: 1, text: '/help', sender: '+15551234567', timestamp: 1000 },
+          { id: 2, text: '/status', sender: '+15559999999', timestamp: 1001 }
+        ]);
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: true,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        // Should call getOrCreateContact for each sender
+        expect(mockGetOrCreateContact).toHaveBeenCalledWith('+15551234567', 'iMessage', 'us');
+        expect(mockGetOrCreateContact).toHaveBeenCalledWith('+15559999999', 'iMessage', 'us');
+      });
+
+      it('passes contact object to processCommand in universal mode', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        const testContact = {
+          id: '+15551234567',
+          trust_level: 'trusted',
+          command_permissions: ['*']
+        };
+        mockGetOrCreateContact.mockReturnValue(testContact);
+        mockGetAllRecentMessages.mockReturnValue([
+          { id: 1, text: '/help', sender: '+15551234567', timestamp: 1000 }
+        ]);
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: true,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        expect(mockProcessCommand).toHaveBeenCalledWith(
+          expect.objectContaining({
+            contact: testContact,
+            phoneNumber: '+15551234567'
+          })
+        );
+      });
+
+      it('passes treatAsNatural: true to processCommand for non-command messages in universal mode', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        mockGetAllRecentMessages.mockReturnValue([
+          { id: 1, text: 'Hello there!', sender: '+15551234567', timestamp: 1000 }
+        ]);
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: true,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        expect(mockProcessCommand).toHaveBeenCalledWith(
+          expect.objectContaining({
+            text: 'Hello there!',
+            treatAsNatural: true
+          })
+        );
+      });
+
+      it('passes treatAsNatural: false for command messages even in universal mode', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        mockGetAllRecentMessages.mockReturnValue([
+          { id: 1, text: '/help', sender: '+15551234567', timestamp: 1000 }
+        ]);
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: true,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        // Commands (starting with /) should have treatAsNatural: false
+        expect(mockProcessCommand).toHaveBeenCalledWith(
+          expect.objectContaining({
+            text: '/help',
+            treatAsNatural: false
+          })
+        );
+      });
+
+      it('uses sender phone number from message (not hardcoded TOMMY_PHONE) in universal mode', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        const otherPhone = '+15559999999';
+        mockGetAllRecentMessages.mockReturnValue([
+          { id: 1, text: '/help', sender: otherPhone, timestamp: 1000 }
+        ]);
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: true,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        expect(mockProcessCommand).toHaveBeenCalledWith(
+          expect.objectContaining({
+            phoneNumber: otherPhone
+          })
+        );
+      });
+
+      it('does not call getOrCreateContact in non-universal mode (uses Tommy phone)', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        mockGetRecentMessages.mockReturnValue([
+          { id: 1, text: '/help', sender: '+12069090025', timestamp: 1000 }
+        ]);
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: false,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        // In non-universal mode, we don't need to look up contacts
+        // since all messages come from Tommy
+        expect(mockGetOrCreateContact).not.toHaveBeenCalled();
+      });
+
+      it('marks messages as processed to prevent duplicates', async () => {
+        expect(imessageBotModule).not.toBeNull();
+
+        mockGetAllRecentMessages.mockReturnValue([
+          { id: 1, text: '/help', sender: '+15551234567', timestamp: 1000 }
+        ]);
+
+        await imessageBotModule.pollMessagesWithDeps({
+          universalAccess: true,
+          getRecentMessages: mockGetRecentMessages,
+          getAllRecentMessages: mockGetAllRecentMessages,
+          getOrCreateContact: mockGetOrCreateContact,
+          processCommand: mockProcessCommand,
+          processedIds,
+          isFirstPoll: false
+        });
+
+        // Message ID should be added to processedIds
+        expect(processedIds.has(1)).toBe(true);
+      });
+    });
+  });
 });

@@ -20,7 +20,7 @@ import { existsSync, writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 // Import library modules
-import { getRecentMessages } from './lib/imessage-reader.js';
+import { getRecentMessages, getAllRecentMessages } from './lib/imessage-reader.js';
 import { safeSendMessage } from './lib/imessage-sender.js';
 import { parseMessage, getHelpText } from './lib/message-parser.js';
 import { enqueue, PRIORITY, getQueueDepth } from './lib/queue.js';
@@ -30,7 +30,7 @@ import { startupCleanup } from './lib/resources.js';
 import { getBusyMessage, getStatusMessage } from './lib/busy-handler.js';
 import { shouldConsultTommy, sendConsultation } from './lib/imessage-consultation.js';
 import { getPendingByCode, resolvePending, getPendingQuestions } from './lib/imessage-pending.js';
-import { getContact } from './lib/imessage-permissions.js';
+import { getContact, getOrCreateContact } from './lib/imessage-permissions.js';
 
 // Configuration constants
 export const TOMMY_PHONE = '+12069090025';
@@ -48,6 +48,7 @@ export function isTommyMessage(phoneNumber) {
 }
 const WORKSPACE = process.cwd();
 const DRY_RUN = process.argv.includes('--dry-run');
+export const UNIVERSAL_ACCESS = process.argv.includes('--universal');
 const LOCK_FILE = join(WORKSPACE, 'imessage-bot.lock');
 
 // Session expiration interval: 1 hour (in ms)
@@ -501,67 +502,119 @@ async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = t
 // ============================================
 
 /**
- * Poll for new messages and process them
+ * Poll for new messages and process them (with injectable dependencies for testing)
+ *
+ * @param {Object} deps - Dependencies
+ * @param {boolean} deps.universalAccess - Whether to use universal access mode
+ * @param {Function} deps.getRecentMessages - Function to get recent messages from a phone
+ * @param {Function} deps.getAllRecentMessages - Function to get all recent messages
+ * @param {Function} deps.getOrCreateContact - Function to get or create a contact
+ * @param {Function} deps.processCommand - Function to process a command
+ * @param {Set} deps.processedIds - Set of processed message IDs
+ * @param {boolean} deps.isFirstPoll - Whether this is the first poll (mark as seen)
  */
-async function pollMessages() {
+export async function pollMessagesWithDeps(deps) {
+  const {
+    universalAccess,
+    getRecentMessages: getRecentMessagesFn,
+    getAllRecentMessages: getAllRecentMessagesFn,
+    getOrCreateContact: getOrCreateContactFn,
+    processCommand: processCommandFn,
+    processedIds,
+    isFirstPoll
+  } = deps;
+
   const DEBUG = process.argv.includes('--debug');
 
   try {
-    const messages = getRecentMessages(TOMMY_PHONE, 20);
+    // Fetch messages based on access mode
+    const messages = universalAccess
+      ? getAllRecentMessagesFn(50)
+      : getRecentMessagesFn(TOMMY_PHONE, 20);
 
     if (DEBUG && messages.length > 0) {
-      console.log(`[Poll] Fetched ${messages.length} messages`);
+      console.log(`[Poll] Fetched ${messages.length} messages (universal=${universalAccess})`);
     }
 
-    // On first poll (no lastProcessedId), record existing messages as "seen"
-    if (lastProcessedId === 0 && messages.length > 0) {
-      // Mark all existing messages as processed
+    // On first poll, record existing messages as "seen"
+    if (isFirstPoll && messages.length > 0) {
       for (const msg of messages) {
-        processedMessageIds.add(msg.id);
+        processedIds.add(msg.id);
       }
-      lastProcessedId = messages[0].id;
       if (DEBUG) {
         console.log(`[Poll] First poll - marked ${messages.length} existing messages as seen`);
       }
       return;
     }
 
-    // Filter to new, valid command messages
-    const toProcess = filterNewMessages(messages, processedMessageIds);
+    // Filter to new, valid messages
+    const toProcess = filterNewMessages(messages, processedIds, { universalAccess });
 
-    // Process each command (oldest first)
+    // Process each message (oldest first)
     const orderedMessages = [...toProcess].reverse();
 
     for (const msg of orderedMessages) {
       // Double-check not already processed (race condition protection)
-      if (processedMessageIds.has(msg.id)) {
+      if (processedIds.has(msg.id)) {
         continue;
       }
 
       // Mark as processed BEFORE handling to prevent duplicates
-      processedMessageIds.add(msg.id);
+      processedIds.add(msg.id);
 
-      console.log(`\n[${new Date().toISOString()}] Received: "${msg.text}"`);
-      await processCommand({
+      // Determine if message is a command or natural message
+      const isCommand = msg.text.startsWith('/');
+
+      // In universal mode, get/create contact for this sender
+      // In non-universal mode, we only get messages from Tommy (hardcoded)
+      const phoneNumber = universalAccess ? msg.sender : TOMMY_PHONE;
+      const contact = universalAccess
+        ? getOrCreateContactFn(msg.sender, 'iMessage', 'us')
+        : null;
+
+      console.log(`\n[${new Date().toISOString()}] Received from ${phoneNumber}: "${msg.text}"`);
+
+      await processCommandFn({
         text: msg.text,
-        phoneNumber: TOMMY_PHONE
+        phoneNumber,
+        contact,
+        treatAsNatural: universalAccess && !isCommand
       });
-    }
-
-    // Update last processed ID
-    if (messages.length > 0) {
-      lastProcessedId = messages[0].id;
-    }
-
-    // Clean up old processed IDs to prevent memory leak
-    if (processedMessageIds.size > MAX_PROCESSED_IDS) {
-      const idsArray = Array.from(processedMessageIds);
-      const toRemove = idsArray.slice(0, idsArray.length - MAX_PROCESSED_IDS);
-      toRemove.forEach(id => processedMessageIds.delete(id));
     }
 
   } catch (err) {
     console.error('Polling error:', err.message);
+  }
+}
+
+/**
+ * Poll for new messages and process them
+ * Uses the module's dependencies (for production use)
+ */
+export async function pollMessages() {
+  const isFirstPoll = lastProcessedId === 0;
+
+  await pollMessagesWithDeps({
+    universalAccess: UNIVERSAL_ACCESS,
+    getRecentMessages,
+    getAllRecentMessages,
+    getOrCreateContact,
+    processCommand,
+    processedIds: processedMessageIds,
+    isFirstPoll
+  });
+
+  // Update last processed ID based on current state of processedMessageIds
+  // (to track that we've done at least one poll)
+  if (isFirstPoll && processedMessageIds.size > 0) {
+    lastProcessedId = Math.max(...processedMessageIds);
+  }
+
+  // Clean up old processed IDs to prevent memory leak
+  if (processedMessageIds.size > MAX_PROCESSED_IDS) {
+    const idsArray = Array.from(processedMessageIds);
+    const toRemove = idsArray.slice(0, idsArray.length - MAX_PROCESSED_IDS);
+    toRemove.forEach(id => processedMessageIds.delete(id));
   }
 }
 
