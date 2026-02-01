@@ -9,7 +9,12 @@
 
 **Goal:** Enable Brokkr to receive and process macOS Notification Center notifications from integrated apps (Messages, Mail, Calendar), with logical processing rules to determine when to invoke the agent.
 
-**Architecture:** This IS the central notification monitor for the Apple Integration suite. Polls the macOS Notification Center SQLite database every 5 seconds, uses a notification-processor subagent to evaluate each notification, and invokes appropriate skills (iMessage, Mail, Calendar, etc.) based on configurable trigger rules. Follows the standardized Apple Integration skill structure.
+**Architecture:** This IS the central notification monitor for the Apple Integration suite. Implements the **Three-Tier Notification Processing** system:
+- **Tier 1:** Core logic (`lib/notification-filter.js`) - instant filtering with no AI overhead
+- **Tier 2:** `notification-processor` subagent - only called when Tier 1 returns "unsure"
+- **Tier 3:** Agent execution flow - command → skill(s) → review → additional skills if needed
+
+Polls the macOS Notification Center SQLite database every 5 seconds. Follows the standardized Apple Integration skill structure.
 
 **Tech Stack:** Node.js, SQLite3 (better-sqlite3), binary plist parsing (bplist-parser), lib/icloud-storage.js for notification logs
 
@@ -64,48 +69,129 @@ This skill is the central notification monitor that invokes other skills:
 - Calendar notifications → /calendar skill
 ```
 
-## Notification-Processor Subagent
+## Three-Tier Notification Processing
+
+### Tier 1: Core Logic (No Agent)
+
+**Location:** `lib/notification-filter.js` (shared library)
+
+Most notifications are filtered instantly without any AI overhead. Pure JavaScript rules execute in < 1ms.
+
+```javascript
+// Called for EVERY notification - must be fast
+const result = filterNotification(notification);
+
+if (result.decision === 'drop') {
+  // Blacklisted - log and ignore
+  logNotification(notification, result);
+  return;
+}
+
+if (result.decision === 'queue') {
+  // Whitelisted or pattern matched - queue immediately
+  queueJob(result.command, result.priority, notification);
+  return;
+}
+
+if (result.decision === 'unsure') {
+  // No clear rule - invoke Tier 2
+  invokeNotificationProcessor(notification);
+}
+```
+
+**Tier 1 Decision Rules:**
+
+| Decision | Criteria | Performance |
+|----------|----------|-------------|
+| DROP | Blacklist match (spam senders, marketing, battery/wifi) | < 1ms |
+| QUEUE CRITICAL | Whitelist match (Tommy's phone, command prefix, flagged emails) | < 1ms |
+| QUEUE + priority | Pattern match (urgent, action required, etc.) | < 1ms |
+| UNSURE → Tier 2 | No rule matched | 0ms (passes to Tier 2) |
+
+---
+
+### Tier 2: Notification-Processor Subagent (Only If Unsure)
 
 **Location:** `.claude/agents/notification-processor.md`
 
-This is the central evaluator for ALL incoming notifications in the Apple Integration suite.
+**IMPORTANT:** This subagent is NOT called for every notification. It's only invoked when Tier 1 core logic returns "unsure" (no blacklist, whitelist, or pattern match).
 
 ```yaml
 ---
 name: notification-processor
-description: Evaluate system notifications and decide if agent should be queued
+description: Evaluate uncertain notifications - only called when core logic cannot decide
 tools: Read, Grep
 model: haiku
 permissionMode: dontAsk
 ---
 
-You are a notification filter for the Brokkr agent. Analyze incoming notifications and decide:
+You are evaluating a notification that didn't match clear rules in Tier 1 filtering.
 
-1. Should the agent be queued? (yes/no)
-2. What skill/command should be invoked?
-3. What priority? (CRITICAL/HIGH/NORMAL/LOW)
+## Notification Data
+$ARGUMENTS
 
-Notification data: $ARGUMENTS
+## Context Available
+- Recent notification history (check for patterns)
+- Sender history (check for importance signals)
+- Current agent workload
 
 ## Decision Criteria
 
-| Source | Queue If | Drop If |
-|--------|----------|---------|
-| iMessage | From known contacts, contains command prefix | Spam, unknown numbers, group chats |
-| Email | Marked important, from whitelist, actionable keywords | Marketing, bulk, newsletters |
-| Calendar | Reminder for event with agent notes | Past events, declined events |
-| Reminders | Has agent tag, near due date | Already completed |
-| System | Focus mode changes, device connects | Routine battery/wifi |
+**QUEUE if:**
+- Sender has history of important messages
+- Content implies action needed but uses unusual phrasing
+- Time-sensitive information without explicit markers
+- Related to active projects or ongoing conversations
+
+**DROP if:**
+- Appears to be automated/bulk despite passing blacklist
+- No actionable content after analysis
+- Duplicate of recently processed notification
+- Low relevance to current priorities
 
 ## Output JSON
 
 {
-  "queue": true/false,
-  "command": "/imessage respond ...",
-  "skill": "imessage",
-  "priority": "HIGH",
-  "reason": "Why this decision"
+  "decision": "queue" | "drop",
+  "priority": "CRITICAL" | "HIGH" | "NORMAL" | "LOW",
+  "command": "/<skill> <action> <context>",
+  "skills": ["primary-skill", "additional-skill-if-needed"],
+  "reason": "Brief explanation of decision"
 }
+```
+
+**Performance:** ~500ms (Haiku is fast, but still 500x slower than Tier 1)
+
+---
+
+### Tier 3: Agent Execution Flow
+
+When a notification is queued (from Tier 1 or Tier 2), the agent follows this flow:
+
+```
+1. COMMAND ISSUED
+   └─▶ Job queued with: command, priority, notification context
+
+2. LOAD PRIMARY SKILL(S)
+   └─▶ /imessage → skills/imessage
+   └─▶ /email → skills/email
+   └─▶ etc.
+
+3. REVIEW NOTIFICATION
+   └─▶ Agent reads full notification context
+   └─▶ Understands sender, content, metadata, history
+
+4. DETERMINE ADDITIONAL SKILLS (if needed)
+   └─▶ Email mentions calendar event? → Load skills/calendar
+   └─▶ Message requests file? → Load skills/finder
+   └─▶ Complex research needed? → Delegate to subagent
+
+5. EXECUTE TASK
+   └─▶ Perform requested action using loaded skills
+
+6. COMPLETION
+   └─▶ Send response via appropriate channel
+   └─▶ Log action taken
 ```
 
 ## iCloud Storage Integration

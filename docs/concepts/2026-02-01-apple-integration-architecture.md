@@ -43,55 +43,319 @@ All large files (recordings, exports, attachments, research docs) stored in iClo
 
 **Pattern:** All skills use `lib/icloud-storage.js` helper for consistent paths.
 
-### 2. Notification Processing Pipeline
+### 2. Notification Processing Pipeline (Three-Tier System)
 
-Each integration that receives notifications follows this flow:
+Notifications are processed through three tiers, optimized for speed and efficiency:
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     NOTIFICATION PROCESSING                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────────┐     ┌────────────────┐     ┌──────────────────┐  │
-│  │ Notification │ ──▶ │ Logical Filter │ ──▶ │ Queue Decision   │  │
-│  │ Monitor      │     │ (per-skill)    │     │                  │  │
-│  └──────────────┘     └────────────────┘     └──────────────────┘  │
-│         │                     │                       │             │
-│         │                     │                       ▼             │
-│         │                     │              ┌──────────────────┐  │
-│         │                     │              │ Drop / Log Only  │  │
-│         │                     │              └──────────────────┘  │
-│         │                     │                       │             │
-│         │                     ▼                       │             │
-│         │              ┌────────────────┐             │             │
-│         │              │ Queue Job with │ ◀───────────┘             │
-│         │              │ Custom Command │                           │
-│         │              └────────────────┘                           │
-│         │                     │                                     │
-│         │                     ▼                                     │
-│         │              ┌────────────────┐                           │
-│         │              │ Worker Loads   │                           │
-│         │              │ Required Skills│                           │
-│         │              └────────────────┘                           │
-│         │                     │                                     │
-│         │                     ▼                                     │
-│         │              ┌────────────────┐                           │
-│         │              │ Agent Executes │                           │
-│         │              │ with Context   │                           │
-│         │              └────────────────┘                           │
-│         │                                                           │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    THREE-TIER NOTIFICATION PROCESSING                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐                                                           │
+│  │ Notification │                                                           │
+│  │ Received     │                                                           │
+│  └──────┬───────┘                                                           │
+│         │                                                                    │
+│         ▼                                                                    │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ TIER 1: CORE LOGIC (No Agent - Instant)                              │   │
+│  │ ════════════════════════════════════════                             │   │
+│  │ Pure JavaScript rules, no AI overhead, < 1ms                         │   │
+│  │                                                                       │   │
+│  │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                │   │
+│  │  │ Blacklist   │   │ Whitelist   │   │ Pattern     │                │   │
+│  │  │ Check       │   │ Check       │   │ Match       │                │   │
+│  │  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                │   │
+│  │         │                 │                 │                        │   │
+│  │         ▼                 ▼                 ▼                        │   │
+│  │    ┌─────────┐      ┌─────────┐      ┌───────────┐                  │   │
+│  │    │  DROP   │      │  QUEUE  │      │  UNSURE   │                  │   │
+│  │    │ (logged)│      │ CRITICAL│      │ → Tier 2  │                  │   │
+│  │    └─────────┘      └─────────┘      └─────┬─────┘                  │   │
+│  └─────────────────────────────────────────────┼───────────────────────┘   │
+│                                                │                            │
+│         ┌──────────────────────────────────────┘                            │
+│         ▼                                                                    │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ TIER 2: NOTIFICATION-PROCESSOR SUBAGENT (Only if unsure)             │   │
+│  │ ════════════════════════════════════════════════════════             │   │
+│  │ Haiku model, fast evaluation, ~500ms                                 │   │
+│  │                                                                       │   │
+│  │  Input: Notification + context                                       │   │
+│  │  Output: { queue: bool, command: str, priority: str, reason: str }   │   │
+│  │                                                                       │   │
+│  │         ┌─────────┐              ┌─────────┐                         │   │
+│  │         │  DROP   │              │  QUEUE  │                         │   │
+│  │         │ (logged)│              │ + reason│                         │   │
+│  │         └─────────┘              └────┬────┘                         │   │
+│  └───────────────────────────────────────┼─────────────────────────────┘   │
+│                                          │                                  │
+│         ┌────────────────────────────────┘                                  │
+│         ▼                                                                    │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ TIER 3: AGENT EXECUTION FLOW                                         │   │
+│  │ ════════════════════════════                                         │   │
+│  │                                                                       │   │
+│  │  ┌──────────┐   ┌──────────────┐   ┌────────────────┐               │   │
+│  │  │ Command  │──▶│ Load Primary │──▶│ Review         │               │   │
+│  │  │ Issued   │   │ Skill(s)     │   │ Notification   │               │   │
+│  │  └──────────┘   └──────────────┘   └───────┬────────┘               │   │
+│  │                                            │                         │   │
+│  │                                            ▼                         │   │
+│  │                                   ┌────────────────┐                 │   │
+│  │                                   │ Need More      │                 │   │
+│  │                                   │ Skills?        │                 │   │
+│  │                                   └───────┬────────┘                 │   │
+│  │                          ┌────────────────┼────────────────┐        │   │
+│  │                          ▼                ▼                ▼        │   │
+│  │                    ┌──────────┐    ┌──────────────┐  ┌──────────┐  │   │
+│  │                    │ No       │    │ Load Add'l   │  │ Delegate │  │   │
+│  │                    │ Continue │    │ Skills       │  │ Subagent │  │   │
+│  │                    └────┬─────┘    └──────┬───────┘  └────┬─────┘  │   │
+│  │                         │                 │               │        │   │
+│  │                         └─────────────────┴───────────────┘        │   │
+│  │                                            │                         │   │
+│  │                                            ▼                         │   │
+│  │                                   ┌────────────────┐                 │   │
+│  │                                   │ Execute Task   │                 │   │
+│  │                                   │ to Completion  │                 │   │
+│  │                                   └────────────────┘                 │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Logical Filter Criteria (per integration):**
+---
 
-| Integration | Queue If | Drop If |
-|-------------|----------|---------|
-| iMessage | From known contacts, contains command prefix | Spam, unknown numbers, group chats |
-| Email | Marked important, from whitelist, actionable keywords | Marketing, bulk, newsletters |
-| Calendar | Reminder for event with agent notes | Past events, declined events |
-| Reminders | Has agent tag, near due date | Already completed |
-| System | Focus mode changes, device connects | Routine battery/wifi |
+#### Tier 1: Core Logic (No Agent)
+
+Pure JavaScript rules that execute instantly. **No AI overhead.**
+
+**Location:** `lib/notification-filter.js`
+
+```javascript
+const RULES = {
+  // BLACKLIST: Always drop (return 'drop')
+  blacklist: {
+    imessage: {
+      senders: ['+1800*', '+1888*', '+1877*'],  // Toll-free (spam)
+      patterns: [/^(?:spam|unsubscribe)/i]
+    },
+    email: {
+      senders: ['*@marketing.*', '*@newsletter.*', 'noreply@*'],
+      subjects: [/^(?:unsubscribe|sale|deal|offer)/i]
+    },
+    calendar: {
+      titles: [/^(?:declined|cancelled)/i]
+    },
+    system: {
+      apps: ['com.apple.wifi', 'com.apple.battery']
+    }
+  },
+
+  // WHITELIST: Always queue with CRITICAL priority (return 'queue')
+  whitelist: {
+    imessage: {
+      senders: ['+12069090025'],  // Tommy's phone
+      patterns: [/^\//, /^brokkr/i]  // Command prefix
+    },
+    email: {
+      senders: ['tommyjohnson90@gmail.com'],
+      flags: ['flagged', 'important']
+    },
+    calendar: {
+      patterns: [/\[AGENT\]/i, /\[BROKKR\]/i]
+    },
+    reminders: {
+      lists: ['Agent Tasks'],
+      patterns: [/\[AGENT\]/i]
+    }
+  },
+
+  // PATTERNS: Specific matches → queue with priority (return 'queue' + priority)
+  patterns: {
+    imessage: [
+      { match: /urgent/i, priority: 'CRITICAL' },
+      { match: /when you can/i, priority: 'LOW' }
+    ],
+    email: [
+      { match: /action required/i, priority: 'HIGH' },
+      { match: /fyi/i, priority: 'LOW' }
+    ]
+  }
+};
+
+function filterNotification(notification) {
+  const { type, sender, content, metadata } = notification;
+  const typeRules = RULES[type] || {};
+
+  // Check blacklist first (instant drop)
+  if (matchesBlacklist(notification, typeRules.blacklist)) {
+    return { decision: 'drop', reason: 'blacklisted', tier: 1 };
+  }
+
+  // Check whitelist (instant queue as CRITICAL)
+  if (matchesWhitelist(notification, typeRules.whitelist)) {
+    return {
+      decision: 'queue',
+      priority: 'CRITICAL',
+      command: getCommandForType(type, notification),
+      reason: 'whitelisted',
+      tier: 1
+    };
+  }
+
+  // Check patterns (queue with specific priority)
+  const patternMatch = matchesPatterns(notification, typeRules.patterns);
+  if (patternMatch) {
+    return {
+      decision: 'queue',
+      priority: patternMatch.priority,
+      command: getCommandForType(type, notification),
+      reason: `pattern: ${patternMatch.match}`,
+      tier: 1
+    };
+  }
+
+  // No match → send to Tier 2
+  return { decision: 'unsure', tier: 1 };
+}
+
+module.exports = { filterNotification, RULES };
+```
+
+**Performance:** < 1ms per notification
+
+---
+
+#### Tier 2: Notification Processor Subagent (Only If Unsure)
+
+Only invoked when Tier 1 returns `unsure`. Uses Haiku for fast evaluation.
+
+**Location:** `.claude/agents/notification-processor.md`
+
+```yaml
+---
+name: notification-processor
+description: Evaluate uncertain notifications - only called when core logic is unsure
+tools: Read, Grep
+model: haiku
+permissionMode: dontAsk
+---
+
+You are evaluating a notification that didn't match clear rules.
+
+## Notification Data
+$ARGUMENTS
+
+## Decision Criteria
+
+**QUEUE if:**
+- Sender has history of important messages (check recent context)
+- Content implies action needed but uses unusual phrasing
+- Time-sensitive information even without explicit markers
+- Related to active projects or ongoing conversations
+
+**DROP if:**
+- Appears to be automated/bulk despite passing blacklist
+- No actionable content after analysis
+- Duplicate of recently processed notification
+- Low relevance to current priorities
+
+## Output Format (JSON only)
+
+{
+  "decision": "queue" | "drop",
+  "priority": "CRITICAL" | "HIGH" | "NORMAL" | "LOW",
+  "command": "/<integration> <action> <context>",
+  "skills": ["primary-skill", "additional-skill-if-needed"],
+  "reason": "Brief explanation"
+}
+```
+
+**Performance:** ~500ms (Haiku is fast)
+
+---
+
+#### Tier 3: Agent Execution Flow
+
+When a notification is queued, the agent follows this structured flow:
+
+```
+1. COMMAND ISSUED
+   └─▶ Queue job with: command, priority, notification context
+
+2. LOAD PRIMARY SKILL(S)
+   └─▶ Based on command: /imessage → skills/imessage
+   └─▶ Skills loaded into agent context
+
+3. REVIEW NOTIFICATION
+   └─▶ Agent reads full notification context
+   └─▶ Understands: sender, content, metadata, history
+
+4. DETERMINE ADDITIONAL SKILLS (if needed)
+   └─▶ Email with attachment? → Load skills/icloud (for storage)
+   └─▶ Message mentions calendar? → Load skills/calendar
+   └─▶ Complex research needed? → Delegate to subagent
+
+5. EXECUTE TASK
+   └─▶ Perform requested action
+   └─▶ Use loaded skills' capabilities
+   └─▶ Store outputs in iCloud if applicable
+
+6. COMPLETION
+   └─▶ Send response via appropriate channel
+   └─▶ Log action taken
+   └─▶ Clear notification context
+```
+
+**Skill Loading Logic (in worker):**
+
+```javascript
+async function executeNotificationJob(job) {
+  const { command, priority, notification } = job;
+
+  // 1. Parse command to get primary skill
+  const primarySkill = parseCommandSkill(command);
+
+  // 2. Set notification context for agent
+  setNotificationContext(notification);
+
+  // 3. Build prompt with skill loading instructions
+  const prompt = `
+Load skill: ${primarySkill}
+
+Notification context:
+${JSON.stringify(notification, null, 2)}
+
+Process this notification. After reviewing, determine if additional skills
+are needed and load them. Then complete the task.
+
+Available skills: imessage, email, calendar, reminders, notes, contacts,
+chrome, finder, music, bluetooth, icloud, shortcuts, screen-capture, video-creation
+`;
+
+  // 4. Execute with Claude
+  await executeWithClaude(prompt, { priority });
+
+  // 5. Cleanup
+  clearNotificationContext();
+}
+```
+
+---
+
+#### Tier 1 Filter Criteria by Integration
+
+| Integration | DROP (Blacklist) | QUEUE CRITICAL (Whitelist) | QUEUE with Priority (Patterns) | UNSURE → Tier 2 |
+|-------------|------------------|---------------------------|-------------------------------|-----------------|
+| **iMessage** | Toll-free numbers, spam patterns | Tommy's phone, `/` prefix | `urgent` → CRITICAL | Unknown sender with substantive content |
+| **Email** | Marketing domains, noreply | Tommy's email, flagged | `action required` → HIGH | Unknown sender, professional domain |
+| **Calendar** | Declined/cancelled events | `[AGENT]` in notes | 15min reminder → NORMAL | Event from unknown organizer |
+| **Reminders** | Completed items | Agent Tasks list | Due within 1hr → HIGH | Shared list updates |
+| **System** | Wifi/battery changes | Focus mode → work | Device connect → NORMAL | Unusual system events |
+| **Bluetooth** | Routine disconnects | Known device connect | New device paired → HIGH | Unknown device nearby |
 
 ### 3. Custom Commands Per Integration
 
@@ -182,45 +446,49 @@ Define integration-specific subagents for specialized tasks:
 
 **Standard Subagents:**
 
-| Subagent | Purpose | Tools |
-|----------|---------|-------|
-| `notification-processor` | Evaluate if notification warrants agent action | Read, Grep |
-| `device-researcher` | Research newly connected devices | Read, Grep, Glob, WebSearch, WebFetch |
-| `content-analyzer` | Analyze attachments, recordings, exports | Read, Grep, Task |
+| Subagent | Purpose | When Used | Tools | Model |
+|----------|---------|-----------|-------|-------|
+| `notification-processor` | Evaluate uncertain notifications (Tier 2 only) | Core logic returns `unsure` | Read, Grep | Haiku |
+| `device-researcher` | Research newly connected devices | New Bluetooth device paired | Read, Grep, Glob, WebSearch, WebFetch | Sonnet |
+| `content-analyzer` | Analyze attachments, recordings, exports | Media processing needed | Read, Grep, Task | Sonnet |
 
-**Example: Notification Processor Subagent**
+**Important:** The `notification-processor` is NOT called for every notification. It's only invoked when Tier 1 core logic cannot make a deterministic decision. Most notifications are filtered instantly by `lib/notification-filter.js` without any AI overhead.
+
+**Example: Device Researcher Subagent**
 
 ```yaml
-# .claude/agents/notification-processor.md
+# .claude/agents/device-researcher.md
 ---
-name: notification-processor
-description: Evaluate system notifications and decide if agent should be queued
-tools: Read, Grep
-model: haiku
-permissionMode: dontAsk
+name: device-researcher
+description: Research newly connected Bluetooth devices to discover capabilities
+tools: Read, Grep, Glob, WebSearch, WebFetch
+model: sonnet
+permissionMode: default
 ---
 
-You are a notification filter. Analyze the notification and decide:
+Research the newly paired Bluetooth device and discover its capabilities.
 
-1. Should the agent be queued? (yes/no)
-2. What command should be issued?
-3. What priority? (CRITICAL/HIGH/NORMAL/LOW)
+## Device Information
+$ARGUMENTS
 
-Notification data: $ARGUMENTS
+## Research Goals
 
-Decision criteria:
-- iMessage from known contact with command → CRITICAL
-- Email marked important with action needed → HIGH
-- Calendar reminder with agent notes → NORMAL
-- Routine system notifications → DROP
+1. Identify device type and manufacturer
+2. Find official documentation for device controls
+3. Discover available commands/protocols
+4. Document battery status capabilities (if applicable)
+5. Find audio routing options (if applicable)
 
-Output JSON:
-{
-  "queue": true/false,
-  "command": "/imessage respond ...",
-  "priority": "HIGH",
-  "reason": "Why this decision"
-}
+## Output
+
+Create reference documentation at:
+`skills/bluetooth/devices/<device-name>/reference.md`
+
+Include:
+- Device capabilities discovered
+- Control scripts that work
+- Known limitations
+- Source URLs for documentation
 ```
 
 ### 6. Hooks Configuration
@@ -269,6 +537,215 @@ Output JSON:
 ---
 
 ## Standard Files
+
+### Core Library: `lib/notification-filter.js`
+
+The Tier 1 filter that processes all notifications without AI overhead.
+
+```javascript
+/**
+ * Notification Filter - Tier 1 Core Logic
+ *
+ * Processes notifications instantly using deterministic rules.
+ * No AI invocation. < 1ms per notification.
+ *
+ * Returns:
+ *   { decision: 'drop', reason, tier: 1 }
+ *   { decision: 'queue', priority, command, reason, tier: 1 }
+ *   { decision: 'unsure', tier: 1 } → sends to Tier 2 subagent
+ */
+
+const RULES = {
+  // ═══════════════════════════════════════════════════════════════
+  // BLACKLIST: Always drop instantly
+  // ═══════════════════════════════════════════════════════════════
+  blacklist: {
+    imessage: {
+      senders: [
+        /^\+1800/,        // Toll-free
+        /^\+1888/,
+        /^\+1877/,
+        /^\+1866/
+      ],
+      content: [
+        /unsubscribe/i,
+        /click here to stop/i,
+        /reply stop/i
+      ]
+    },
+    email: {
+      senders: [
+        /@marketing\./i,
+        /@newsletter\./i,
+        /@promo\./i,
+        /^noreply@/i,
+        /^no-reply@/i
+      ],
+      subjects: [
+        /^(?:sale|deal|offer|discount)/i,
+        /unsubscribe/i,
+        /weekly digest/i
+      ]
+    },
+    calendar: {
+      titles: [
+        /^declined:/i,
+        /^cancelled:/i
+      ]
+    },
+    system: {
+      bundleIds: [
+        'com.apple.wifi.proxy',
+        'com.apple.battery',
+        'com.apple.photoanalysisd'
+      ]
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // WHITELIST: Always queue as CRITICAL
+  // ═══════════════════════════════════════════════════════════════
+  whitelist: {
+    imessage: {
+      senders: [
+        '+12069090025'    // Tommy's phone
+      ],
+      content: [
+        /^\//,            // Command prefix
+        /^brokkr/i,       // Direct address
+        /^hey brokkr/i
+      ]
+    },
+    email: {
+      senders: [
+        'tommyjohnson90@gmail.com'
+      ],
+      flags: ['flagged', 'important'],
+      subjects: [
+        /\[AGENT\]/i,
+        /\[BROKKR\]/i
+      ]
+    },
+    calendar: {
+      content: [
+        /\[AGENT\]/i,
+        /\[BROKKR\]/i
+      ]
+    },
+    reminders: {
+      lists: ['Agent Tasks', 'Brokkr'],
+      content: [
+        /\[AGENT\]/i
+      ]
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // PATTERNS: Match → queue with specific priority
+  // ═══════════════════════════════════════════════════════════════
+  patterns: {
+    imessage: [
+      { match: /urgent/i, priority: 'CRITICAL' },
+      { match: /asap/i, priority: 'HIGH' },
+      { match: /when you (?:can|get a chance)/i, priority: 'LOW' },
+      { match: /fyi/i, priority: 'LOW' }
+    ],
+    email: [
+      { match: /action required/i, priority: 'HIGH' },
+      { match: /please review/i, priority: 'NORMAL' },
+      { match: /fyi|for your information/i, priority: 'LOW' }
+    ],
+    calendar: [
+      { match: /interview/i, priority: 'HIGH' },
+      { match: /deadline/i, priority: 'HIGH' }
+    ],
+    bluetooth: [
+      { match: /airpods/i, priority: 'NORMAL' },
+      { match: /new device/i, priority: 'HIGH' }
+    ]
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// COMMAND MAPPING: notification type → skill command
+// ═══════════════════════════════════════════════════════════════
+const COMMANDS = {
+  imessage: (n) => `/imessage respond "${n.sender}"`,
+  email: (n) => `/email process "${n.messageId}"`,
+  calendar: (n) => `/calendar handle "${n.eventId}"`,
+  reminders: (n) => `/reminders process "${n.reminderId}"`,
+  bluetooth: (n) => `/bluetooth handle "${n.deviceId}"`,
+  system: (n) => `/system handle "${n.type}"`
+};
+
+function matchesAny(value, patterns) {
+  if (!patterns || !value) return false;
+  return patterns.some(p => {
+    if (p instanceof RegExp) return p.test(value);
+    if (typeof p === 'string') return value.includes(p);
+    return false;
+  });
+}
+
+function filterNotification(notification) {
+  const { type, sender, content, subject, metadata = {} } = notification;
+  const blacklist = RULES.blacklist[type] || {};
+  const whitelist = RULES.whitelist[type] || {};
+  const patterns = RULES.patterns[type] || [];
+
+  // ─────────────────────────────────────────────────────────────
+  // BLACKLIST CHECK (instant drop)
+  // ─────────────────────────────────────────────────────────────
+  if (matchesAny(sender, blacklist.senders) ||
+      matchesAny(content, blacklist.content) ||
+      matchesAny(subject, blacklist.subjects) ||
+      matchesAny(metadata.bundleId, blacklist.bundleIds)) {
+    return { decision: 'drop', reason: 'blacklisted', tier: 1 };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // WHITELIST CHECK (instant queue as CRITICAL)
+  // ─────────────────────────────────────────────────────────────
+  if (matchesAny(sender, whitelist.senders) ||
+      matchesAny(content, whitelist.content) ||
+      matchesAny(subject, whitelist.subjects) ||
+      (metadata.flags && whitelist.flags?.some(f => metadata.flags.includes(f))) ||
+      (metadata.list && whitelist.lists?.includes(metadata.list))) {
+    return {
+      decision: 'queue',
+      priority: 'CRITICAL',
+      command: COMMANDS[type]?.(notification) || `/system handle`,
+      reason: 'whitelisted',
+      tier: 1
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // PATTERN CHECK (queue with specific priority)
+  // ─────────────────────────────────────────────────────────────
+  const searchText = `${content || ''} ${subject || ''}`;
+  for (const pattern of patterns) {
+    if (pattern.match.test(searchText)) {
+      return {
+        decision: 'queue',
+        priority: pattern.priority,
+        command: COMMANDS[type]?.(notification) || `/system handle`,
+        reason: `pattern: ${pattern.match}`,
+        tier: 1
+      };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // NO MATCH → Send to Tier 2 (notification-processor subagent)
+  // ─────────────────────────────────────────────────────────────
+  return { decision: 'unsure', tier: 1 };
+}
+
+module.exports = { filterNotification, RULES, COMMANDS };
+```
+
+---
 
 ### Shared Library: `lib/icloud-storage.js`
 
@@ -353,15 +830,28 @@ When creating a new Apple Integration skill:
 
 ---
 
-## Open Questions
+## Design Decisions
 
-1. Should notification monitor be a single process or per-integration?
-2. How to handle rate limiting for rapid notification bursts?
-3. Should device research results be shared across skills?
+### Resolved
+
+1. **Single notification monitor process** - One `notification-monitor.js` handles all notification types, routes to appropriate skills via commands
+2. **Three-tier processing** - Core logic (no AI) → Subagent (only if unsure) → Agent execution
+3. **Device research in skill directory** - Results stored in `skills/bluetooth/devices/<device>/`
+
+### Open Questions
+
+1. How to handle rate limiting for rapid notification bursts? (Debounce? Queue batching?)
+2. Should Tier 1 rules be configurable via JSON or hardcoded for performance?
+3. How to handle notification context expiry? (TTL on temp files?)
 
 ## Next Steps
 
-- [ ] Update existing Bluetooth plan to follow these patterns
-- [ ] Create notification-processor subagent definition
+- [x] ~~Update existing Bluetooth plan to follow these patterns~~
+- [x] ~~Create notification-processor subagent definition~~
+- [x] ~~Update all Phase 1-6 plans with standardized structure~~
+- [ ] Implement `lib/notification-filter.js` (Tier 1 core logic)
 - [ ] Implement `lib/icloud-storage.js` shared library
-- [ ] Update all Phase 1-6 plans with standardized structure
+- [ ] Implement `lib/notification-context.js` shared library
+- [ ] Create `.claude/agents/notification-processor.md`
+- [ ] Create `.claude/agents/device-researcher.md`
+- [ ] Update `notification-monitor.js` to use three-tier system
