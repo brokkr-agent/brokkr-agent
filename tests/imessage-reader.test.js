@@ -1,6 +1,6 @@
 // tests/imessage-reader.test.js
 import { describe, it, expect } from '@jest/globals';
-import { macTimeToUnix, getDbPath, getRecentMessages, getGroupMessages, getGroupMembers } from '../lib/imessage-reader.js';
+import { macTimeToUnix, getDbPath, getRecentMessages, getGroupMessages, getGroupMembers, getAllRecentMessages } from '../lib/imessage-reader.js';
 import os from 'os';
 import path from 'path';
 
@@ -150,6 +150,60 @@ describe('iMessage Reader Module', () => {
       // Using a fake chat GUID - will return empty array if not found
       const members = getGroupMembers('chat123456789');
       expect(Array.isArray(members)).toBe(true);
+    });
+  });
+
+  describe('getAllRecentMessages', () => {
+    it('should be exported from the module', () => {
+      expect(typeof getAllRecentMessages).toBe('function');
+    });
+
+    it('should return an array', () => {
+      const messages = getAllRecentMessages(10);
+      expect(Array.isArray(messages)).toBe(true);
+    });
+
+    it('should return empty array for invalid limit (negative)', () => {
+      const messages = getAllRecentMessages(-1);
+      expect(messages).toEqual([]);
+    });
+
+    it('should return empty array for invalid limit (too large)', () => {
+      const messages = getAllRecentMessages(10000);
+      expect(messages).toEqual([]);
+    });
+
+    it('should return empty array for invalid limit (non-integer)', () => {
+      const messages = getAllRecentMessages(5.5);
+      expect(messages).toEqual([]);
+    });
+
+    it('should respect the limit parameter', () => {
+      const limit = 5;
+      const messages = getAllRecentMessages(limit);
+      expect(messages.length).toBeLessThanOrEqual(limit);
+    });
+
+    it('should use default limit of 50', () => {
+      // Just verify it does not throw when called without limit
+      const messages = getAllRecentMessages();
+      expect(Array.isArray(messages)).toBe(true);
+    });
+
+    it('should return messages with expected structure including chat_id', () => {
+      const messages = getAllRecentMessages(10);
+
+      // If any messages returned, verify structure includes chat_id
+      if (messages.length > 0) {
+        const msg = messages[0];
+        expect(msg).toHaveProperty('id');
+        expect(msg).toHaveProperty('text');
+        expect(msg).toHaveProperty('timestamp');
+        expect(msg).toHaveProperty('sender');
+        expect(msg).toHaveProperty('chat_id');
+        expect(typeof msg.id).toBe('number');
+        expect(typeof msg.timestamp).toBe('number');
+      }
     });
   });
 });
