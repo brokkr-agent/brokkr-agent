@@ -3248,7 +3248,67 @@ git commit -m "feat: rewrite whatsapp bot with priority queue and sessions"
 
 ---
 
-## Phase 4: Webhook Server
+## Phase 4: Webhook Server - COMPLETE ✅
+
+**Completed:** 2026-01-31
+**Tests Added:** 28 (16 webhook + 12 dry-run/debug)
+**Commits:**
+- `c5bef06` - feat: add webhook server for external integrations
+- `b9a25f3` - fix: add security and validation improvements to webhook server
+- `8eab905` - feat: add dry-run and debug mode to webhook server
+
+| Task | Files | Tests | Commit |
+|------|-------|-------|--------|
+| 4.1: Express Webhook Server | `lib/webhook-server.js` | 16 | `c5bef06`, `b9a25f3` |
+| 4.2: Dry-Run & Debug Mode | `webhook-server.js`, `lib/webhook-server.js` | 12 | `8eab905` |
+
+---
+
+### Dry-Run & Debug Mode
+
+**CLI Entry Point:** `webhook-server.js`
+
+```bash
+# Start webhook server normally
+node webhook-server.js
+
+# Start in dry-run mode (accepts requests but doesn't execute)
+node webhook-server.js --dry-run
+
+# Start with debug logging
+node webhook-server.js --debug
+
+# Start with both
+node webhook-server.js --dry-run --debug
+```
+
+**Dry-Run Mode Behavior:**
+- `POST /webhook` returns `sessionCode: "dry"`, `jobId: "dry-run-job"` without creating real sessions
+- `POST /webhook/:sessionCode` logs what WOULD happen without enqueuing
+- `GET /webhook/dry` returns mock session data
+- Logs `[DRY-RUN] Would create webhook session and enqueue: <task>`
+
+**Debug Mode Behavior:**
+- Logs all incoming requests: `[DEBUG] --> POST /webhook {"task":"..."}`
+- Logs all outgoing responses: `[DEBUG] <-- 200 {"success":true,...}`
+
+**Testing with curl:**
+```bash
+# Test new task submission
+curl -X POST http://localhost:3000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"task": "research AI agents"}'
+
+# Test session continuation
+curl -X POST http://localhost:3000/webhook/dry \
+  -H "Content-Type: application/json" \
+  -d '{"message": "continue please"}'
+
+# Check health
+curl http://localhost:3000/health
+```
+
+---
 
 ### Webhook API Reference
 
