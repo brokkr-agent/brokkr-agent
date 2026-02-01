@@ -3,6 +3,7 @@ import { jest } from '@jest/globals';
 import request from 'supertest';
 import { join } from 'path';
 import { existsSync, rmSync } from 'fs';
+import { signRequest } from '../lib/hmac.js';
 
 // Set up test directory before importing modules
 const TEST_JOBS_DIR = join(process.cwd(), 'test-webhook-jobs');
@@ -441,6 +442,167 @@ describe('Webhook Server', () => {
       expect(isDebugMode()).toBe(true);
       setDebugMode(false);
       expect(isDebugMode()).toBe(false);
+    });
+  });
+
+  describe('BrokkrMVP Protocol', () => {
+    const TEST_SECRET = 'test-webhook-secret';
+    const TEST_AGENT_ID = 'test-agent-uuid';
+
+    // Helper to create signed request
+    function signedRequest(body) {
+      const { timestamp, signature } = signRequest(body, TEST_SECRET);
+      return {
+        headers: {
+          'x-agent-id': TEST_AGENT_ID,
+          'x-timestamp': timestamp.toString(),
+          'x-signature': signature
+        },
+        body
+      };
+    }
+
+    describe('POST /webhook with fat payload', () => {
+      it('should accept task.created event with valid signature', async () => {
+        const payload = {
+          event: 'task.created',
+          task: {
+            id: '550e8400-e29b-41d4-a716-446655440000',
+            task_type: 'equipment_research',
+            priority: 75,
+            input_data: {
+              equipment_type: 'laser_cutter',
+              user_context: 'Find laser cutters for acrylic'
+            },
+            messages: [],
+            session_code: 'xyz'
+          }
+        };
+        const { headers, body } = signedRequest(payload);
+
+        const res = await request(app)
+          .post('/webhook')
+          .set(headers)
+          .send(body);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('accepted');
+        expect(res.body.queue_position).toBeDefined();
+      });
+
+      it('should reject request with invalid signature', async () => {
+        const payload = { event: 'task.created', task: { id: '123' } };
+
+        const res = await request(app)
+          .post('/webhook')
+          .set({
+            'x-agent-id': TEST_AGENT_ID,
+            'x-timestamp': Math.floor(Date.now() / 1000).toString(),
+            'x-signature': 'sha256=invalid'
+          })
+          .send(payload);
+
+        expect(res.status).toBe(401);
+        expect(res.body.error).toBe('Invalid signature');
+      });
+
+      it('should reject request with expired timestamp', async () => {
+        const payload = { event: 'task.created', task: { id: '123' } };
+        const oldTimestamp = Math.floor(Date.now() / 1000) - 400;
+        const { signature } = signRequest(payload, TEST_SECRET, oldTimestamp);
+
+        const res = await request(app)
+          .post('/webhook')
+          .set({
+            'x-agent-id': TEST_AGENT_ID,
+            'x-timestamp': oldTimestamp.toString(),
+            'x-signature': signature
+          })
+          .send(payload);
+
+        expect(res.status).toBe(401);
+        expect(res.body.error).toBe('Request timestamp expired');
+      });
+    });
+
+    describe('task.clarification event', () => {
+      it('should update existing job with new messages', async () => {
+        // First create a task
+        const createPayload = {
+          event: 'task.created',
+          task: {
+            id: 'clarify-task-id',
+            task_type: 'equipment_research',
+            priority: 75,
+            input_data: { query: 'test' },
+            messages: [],
+            session_code: 'cla'
+          }
+        };
+        let { headers, body } = signedRequest(createPayload);
+        await request(app).post('/webhook').set(headers).send(body);
+
+        // Now send clarification
+        const clarifyPayload = {
+          event: 'task.clarification',
+          task: {
+            id: 'clarify-task-id',
+            task_type: 'equipment_research',
+            input_data: { query: 'test' },
+            messages: [
+              { role: 'agent', content: 'What size?' },
+              { role: 'user', content: '3mm' }
+            ],
+            session_code: 'cla'
+          }
+        };
+        ({ headers, body } = signedRequest(clarifyPayload));
+
+        const res = await request(app)
+          .post('/webhook')
+          .set(headers)
+          .send(body);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('accepted');
+      });
+    });
+
+    describe('task.cancelled event', () => {
+      it('should cancel existing job', async () => {
+        // First create a task
+        const createPayload = {
+          event: 'task.created',
+          task: {
+            id: 'cancel-task-id',
+            task_type: 'equipment_research',
+            priority: 75,
+            input_data: {},
+            messages: [],
+            session_code: 'can'
+          }
+        };
+        let { headers, body } = signedRequest(createPayload);
+        await request(app).post('/webhook').set(headers).send(body);
+
+        // Now cancel it
+        const cancelPayload = {
+          event: 'task.cancelled',
+          task: {
+            id: 'cancel-task-id',
+            session_code: 'can'
+          }
+        };
+        ({ headers, body } = signedRequest(cancelPayload));
+
+        const res = await request(app)
+          .post('/webhook')
+          .set(headers)
+          .send(body);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('cancelled');
+      });
     });
   });
 });
