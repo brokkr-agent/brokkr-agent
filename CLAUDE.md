@@ -78,8 +78,9 @@ Use these credentials to log into any service that requires authentication (GitH
 - `lib/worker.js` - Task execution
 - `lib/resources.js` - Cleanup management
 - `lib/webhook-server.js` - HTTP API
-- `lib/commands.js` - Command parser
-- `lib/help.js` - Help text
+- `lib/message-parser.js` - WhatsApp command parser
+- `lib/command-registry.js` - Command registry and lookup
+- `lib/executor.js` - Claude Code executor
 
 ## Starting the Bot
 
