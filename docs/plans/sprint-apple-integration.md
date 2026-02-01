@@ -40,6 +40,7 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 | [Chrome Skill](./2026-02-01-chrome-skill-plan.md) | Not Started | None | 10 |
 | [Finder & System Skill](./2026-02-01-finder-system-skill-plan.md) | Not Started | None | 9 |
 | [Music Skill](./2026-02-01-music-skill-plan.md) | Not Started | None | 7 |
+| [Bluetooth Skill](./2026-02-01-bluetooth-skill-plan.md) | Concept Only | None | 11 |
 
 ### Phase 5: Content Creation
 
@@ -53,7 +54,7 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 |------|--------|--------------|------------|
 | [Shortcuts & Automation](./2026-02-01-shortcuts-automation-skill-plan.md) | Not Started | None | 10 |
 
-**Total: 13 plans, ~138 tasks**
+**Total: 14 plans, ~149 tasks**
 
 ## Architecture Principles
 
@@ -132,6 +133,7 @@ Research completed using parallel agents against official Apple documentation:
 | screencapture CLI | ✅ Complete | Add cursor capture, audio sources, permissions docs |
 | Notification Center | ✅ Complete | SQLite polling works, no real-time API exists |
 | Focus Modes | 🔲 Pending | Shortcuts integration needed |
+| Bluetooth Control | ✅ Complete | Use blueutil CLI, no native AppleScript support |
 
 ### Key Research Findings
 
@@ -142,6 +144,8 @@ Research completed using parallel agents against official Apple documentation:
 3. **Screen Recording** - `screencapture -v` works. Add `-C` for cursor. Remotion 4.0 is 281% faster.
 
 4. **Notifications** - Poll `$(getconf DARWIN_USER_DIR)/com.apple.notificationcenter/db2/db`. No permissions on Sonoma. Sequoia adds TCC.
+
+5. **Bluetooth** - No native AppleScript support. Use `blueutil` CLI (`brew install blueutil`) for power, discovery, connect, disconnect, and pairing.
 
 ### Documentation Sources
 
