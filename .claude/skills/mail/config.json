@@ -1,0 +1,19 @@
+{
+  "name": "mail",
+  "version": "0.0.1",
+  "status": "placeholder",
+  "notificationTriggers": {
+    "bundleId": "com.apple.mail",
+    "senders": ["tommyjohnson90@gmail.com"],
+    "flags": ["flagged", "important"],
+    "subjectPatterns": ["\\[AGENT\\]", "\\[BROKKR\\]"]
+  },
+  "account": "iCloud",
+  "email": "brokkrassist@icloud.com",
+  "batch_size": 50,
+  "auto_triage": false,
+  "urgent_senders": [],
+  "urgent_keywords": ["urgent", "asap", "emergency", "critical", "time-sensitive", "action required"],
+  "timeout_seconds": 600,
+  "icloud_attachments_path": "Attachments"
+}

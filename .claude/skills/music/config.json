@@ -1,0 +1,17 @@
+{
+  "name": "music",
+  "description": "Control Apple Music playback",
+  "version": "0.1.0",
+  "status": "placeholder",
+  "capabilities": [
+    "playback_control",
+    "search_library",
+    "volume_control",
+    "playlist_management",
+    "queue_management"
+  ],
+  "dependencies": {
+    "apps": ["Music.app"],
+    "permissions": ["AppleScript"]
+  }
+}

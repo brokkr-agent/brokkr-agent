@@ -366,7 +366,7 @@ Each integration defines a command that:
 
 **Command Location:** `.claude/commands/<integration>.md`
 
-**Skill Location:** `skills/<integration>/SKILL.md`
+**Skill Location:** `.claude/skills/<integration>/SKILL.md`
 
 **Pattern:**
 
@@ -390,7 +390,7 @@ Context from notification (if triggered by monitor):
 All Apple Integration skills follow this structure:
 
 ```
-skills/<integration>/
+.claude/skills/<integration>/
 ├── SKILL.md                    # Main instructions
 ├── config.json                 # Integration-specific config
 ├── lib/
@@ -818,14 +818,14 @@ module.exports = { setNotificationContext, getNotificationContext, clearNotifica
 
 When creating a new Apple Integration skill:
 
-- [ ] Create `skills/<integration>/SKILL.md` with standard header
-- [ ] Create `skills/<integration>/config.json` for integration config
-- [ ] Create `skills/<integration>/lib/<integration>.js` for core logic
+- [ ] Create `.claude/skills/<integration>/SKILL.md` with standard header
+- [ ] Create `.claude/skills/<integration>/config.json` for integration config
+- [ ] Create `.claude/skills/<integration>/lib/<integration>.js` for core logic
 - [ ] Create `.claude/commands/<integration>.md` for manual invocation
 - [ ] Define notification filter criteria in processor subagent
 - [ ] Add iCloud storage paths for any large file output
-- [ ] Create reference docs in `skills/<integration>/reference/`
-- [ ] Write tests in `skills/<integration>/tests/`
+- [ ] Create reference docs in `.claude/skills/<integration>/reference/`
+- [ ] Write tests in `.claude/skills/<integration>/tests/`
 - [ ] Update sprint index with new plan status
 
 ---

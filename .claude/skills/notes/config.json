@@ -1,0 +1,31 @@
+{
+  "name": "notes",
+  "version": "0.1.0",
+  "status": "placeholder",
+  "description": "Apple Notes integration for note management",
+  "capabilities": [
+    "create-note",
+    "search-notes",
+    "append-to-note",
+    "list-notes",
+    "delete-note",
+    "manage-folders"
+  ],
+  "dependencies": {
+    "applescript": true,
+    "icloud-storage": true
+  },
+  "notificationFilter": {
+    "whitelist": {
+      "content": ["\\[AGENT\\]", "\\[BROKKR\\]"]
+    },
+    "patterns": [
+      { "match": "shared with you", "priority": "NORMAL" }
+    ],
+    "blacklist": {}
+  },
+  "icloudPaths": {
+    "exports": "Exports"
+  },
+  "defaultFolder": "Brokkr"
+}

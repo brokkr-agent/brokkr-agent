@@ -1,0 +1,14 @@
+{
+  "name": "shortcuts",
+  "version": "1.0.0",
+  "description": "Run and manage Apple Shortcuts from the command line",
+  "cli": {
+    "path": "/usr/bin/shortcuts",
+    "defaultTimeout": 30000
+  },
+  "knownShortcuts": {
+    "airpodsNoiseControl": "AirPods Noise Control",
+    "toggleDarkMode": "Toggle Dark Mode",
+    "setFocusMode": "Set Focus Mode"
+  }
+}

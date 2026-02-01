@@ -1,0 +1,115 @@
+{
+  "polling_interval_ms": 5000,
+  "max_notifications_per_poll": 50,
+  "state_save_interval_ms": 60000,
+  "rules": [
+    {
+      "name": "tommy-imessage",
+      "description": "Messages from Tommy's phone",
+      "app": "imessage",
+      "condition": {
+        "anyContains": "+12069090025"
+      },
+      "action": "invoke",
+      "priority": 100,
+      "taskPrefix": "Tommy messaged:"
+    },
+    {
+      "name": "command-prefix",
+      "description": "Messages starting with / (command prefix)",
+      "app": "imessage",
+      "condition": {
+        "pattern": "^\\/"
+      },
+      "action": "invoke",
+      "priority": 100
+    },
+    {
+      "name": "brokkr-address",
+      "description": "Messages addressing Brokkr directly",
+      "app": "imessage",
+      "condition": {
+        "pattern": "^(?:brokkr|hey brokkr)"
+      },
+      "action": "invoke",
+      "priority": 95
+    },
+    {
+      "name": "urgent-email",
+      "description": "Emails with URGENT in subject",
+      "app": "mail",
+      "condition": {
+        "keywords": ["URGENT", "CRITICAL", "ASAP", "EMERGENCY"]
+      },
+      "action": "invoke",
+      "priority": 90
+    },
+    {
+      "name": "brokkr-email",
+      "description": "Emails from brokkr.co",
+      "app": "mail",
+      "condition": {
+        "anyContains": "@brokkr.co"
+      },
+      "action": "invoke",
+      "priority": 85
+    },
+    {
+      "name": "agent-calendar",
+      "description": "Calendar events with [AGENT] marker",
+      "app": "calendar",
+      "condition": {
+        "pattern": "\\[AGENT\\]"
+      },
+      "action": "invoke",
+      "priority": 80
+    },
+    {
+      "name": "calendar-reminder",
+      "description": "All calendar notifications",
+      "app": "calendar",
+      "condition": {
+        "any": true
+      },
+      "action": "log",
+      "priority": 50
+    },
+    {
+      "name": "facetime-call",
+      "description": "Incoming FaceTime calls",
+      "app": "facetime",
+      "condition": {
+        "any": true
+      },
+      "action": "log",
+      "priority": 60
+    }
+  ],
+  "blacklist": {
+    "imessage": {
+      "senders": ["+1800", "+1888", "+1877", "+1866"],
+      "patterns": ["unsubscribe", "reply stop"]
+    },
+    "mail": {
+      "senders": ["@marketing.", "@newsletter.", "@promo.", "noreply@", "no-reply@"],
+      "patterns": ["unsubscribe", "weekly digest"]
+    },
+    "system": {
+      "bundleIds": ["com.apple.wifi.proxy", "com.apple.battery", "com.apple.photoanalysisd"]
+    }
+  },
+  "whitelist": {
+    "imessage": {
+      "senders": ["+12069090025"]
+    },
+    "mail": {
+      "senders": ["tommyjohnson90@gmail.com"],
+      "flags": ["flagged", "important"]
+    }
+  },
+  "ignored_apps": [
+    "com.apple.finder",
+    "com.apple.systempreferences",
+    "com.apple.Safari"
+  ]
+}

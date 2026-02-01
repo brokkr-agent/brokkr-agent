@@ -1,0 +1,35 @@
+{
+  "exports_dir": "~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Exports",
+  "icloud_shared_dir": "~/Library/Mobile Documents/com~apple~CloudDocs/Family/Brokkr-Videos",
+  "local_videos_dir": "/Users/brokkrbot/brokkr-agent/videos",
+  "remotion_project_dir": "/Users/brokkrbot/brokkr-agent/remotion-videos",
+  "remotion_concurrency": 2,
+  "default_resolution": "1080p",
+  "default_fps": 30,
+  "intro_duration_frames": 90,
+  "outro_duration_frames": 120,
+  "crf_quality": {
+    "high": 18,
+    "medium": 23,
+    "low": 28
+  },
+  "templates": {
+    "TutorialVideo": {
+      "description": "Standard tutorial with intro/outro",
+      "intro_duration": 90,
+      "outro_duration": 120
+    },
+    "QuickDemo": {
+      "description": "Shorter format, minimal intro",
+      "intro_duration": 30,
+      "outro_duration": 60
+    }
+  },
+  "branding": {
+    "primary_color": "#e94560",
+    "background_gradient": ["#1a1a2e", "#16213e", "#0f3460"],
+    "font_family": "system-ui, -apple-system, sans-serif",
+    "cta_text": "Try brokkr.co",
+    "cta_url": "brokkr.co"
+  }
+}

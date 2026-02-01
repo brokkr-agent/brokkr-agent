@@ -1,0 +1,13 @@
+{
+  "recordings_dir": "~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Recordings",
+  "local_recordings_dir": "/Users/brokkrbot/brokkr-agent/recordings",
+  "default_format": "mov",
+  "capture_cursor": true,
+  "suppress_sounds": true,
+  "default_display": 1,
+  "lock_file": "/Users/brokkrbot/brokkr-agent/recordings/.recording.lock",
+  "permissions": {
+    "screen_recording": "System Settings -> Privacy & Security -> Screen Recording -> Terminal",
+    "automation": "System Settings -> Privacy & Security -> Automation -> Terminal"
+  }
+}

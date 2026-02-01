@@ -1,0 +1,13 @@
+{
+  "name": "icloud",
+  "version": "1.0.0",
+  "description": "iCloud storage path management for Brokkr agent",
+  "basePath": "~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr",
+  "categories": {
+    "recordings": "Recordings",
+    "exports": "Exports",
+    "attachments": "Attachments",
+    "research": "Research"
+  },
+  "dateFormat": "YYYY-MM-DD"
+}

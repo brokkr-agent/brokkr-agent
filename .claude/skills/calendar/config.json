@@ -1,0 +1,32 @@
+{
+  "name": "calendar",
+  "version": "0.1.0",
+  "status": "placeholder",
+  "description": "Apple Calendar integration for event management",
+  "capabilities": [
+    "list-events",
+    "create-event",
+    "update-event",
+    "delete-event",
+    "handle-reminders"
+  ],
+  "dependencies": {
+    "applescript": true,
+    "icloud-storage": true
+  },
+  "notificationFilter": {
+    "whitelist": {
+      "content": ["\\[AGENT\\]", "\\[BROKKR\\]"]
+    },
+    "patterns": [
+      { "match": "interview", "priority": "HIGH" },
+      { "match": "deadline", "priority": "HIGH" }
+    ],
+    "blacklist": {
+      "titles": ["^declined:", "^cancelled:"]
+    }
+  },
+  "icloudPaths": {
+    "exports": "Exports"
+  }
+}

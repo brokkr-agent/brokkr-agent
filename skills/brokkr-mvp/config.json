@@ -1,6 +1,6 @@
 {
   "agent_id": "cd58c18a-5150-42df-99ae-5c3fdf4116ed",
-  "webhook_secret": "REPLACE_WITH_SHARED_SECRET",
+  "webhook_secret": "HrjuV60oo7as5eYniuqYITPa8hkCSShU851jH6e7U4E",
   "api_url": "https://api.brokkr.app",
   "capabilities": [
     "equipment_research",

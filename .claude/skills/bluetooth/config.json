@@ -1,0 +1,19 @@
+{
+  "name": "bluetooth",
+  "version": "1.0.0",
+  "description": "Bluetooth control and device management skill",
+  "blueutil": {
+    "paths": [
+      "/opt/homebrew/bin/blueutil",
+      "/usr/local/bin/blueutil",
+      "blueutil"
+    ],
+    "defaultTimeout": 30000,
+    "inquiryTimeout": 15
+  },
+  "deviceResearch": {
+    "enabled": true,
+    "autoResearchNewDevices": true,
+    "researchOnConnect": false
+  }
+}

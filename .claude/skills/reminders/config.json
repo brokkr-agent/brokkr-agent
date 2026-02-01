@@ -1,0 +1,35 @@
+{
+  "name": "reminders",
+  "version": "0.1.0",
+  "status": "placeholder",
+  "description": "Apple Reminders integration for task management",
+  "capabilities": [
+    "list-reminders",
+    "create-reminder",
+    "complete-reminder",
+    "update-reminder",
+    "delete-reminder",
+    "manage-lists"
+  ],
+  "dependencies": {
+    "applescript": true,
+    "icloud-storage": true
+  },
+  "notificationFilter": {
+    "whitelist": {
+      "lists": ["Agent Tasks", "Brokkr"],
+      "content": ["\\[AGENT\\]"]
+    },
+    "patterns": [
+      { "match": "due within 1hr", "priority": "HIGH" },
+      { "match": "urgent", "priority": "CRITICAL" }
+    ],
+    "blacklist": {
+      "completed": true
+    }
+  },
+  "icloudPaths": {
+    "exports": "Exports"
+  },
+  "defaultList": "Agent Tasks"
+}

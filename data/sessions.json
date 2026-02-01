@@ -1,17 +1,17 @@
 {
   "sessions": [
     {
-      "code": "w7",
+      "code": "fq",
       "type": "whatsapp",
       "task": "Persist test",
       "chatId": null,
       "source": null,
-      "sessionId": "session-ml315dbi-bu8svu",
+      "sessionId": "session-ml3lz3vv-i573jz",
       "claudeSessionId": null,
-      "createdAt": "2026-02-01T00:56:07.854Z",
-      "lastActivity": "2026-02-01T00:56:07.854Z",
+      "createdAt": "2026-02-01T10:39:07.627Z",
+      "lastActivity": "2026-02-01T10:39:07.627Z",
       "status": "active"
     }
   ],
-  "lastUpdated": "2026-02-01T00:56:07.854Z"
+  "lastUpdated": "2026-02-01T10:39:07.627Z"
 }
