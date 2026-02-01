@@ -1,18 +1,14 @@
 {
   "name": "imessage",
-  "version": "0.0.1",
-  "status": "placeholder",
-  "notificationTriggers": {
-    "bundleId": "com.apple.MobileSMS",
-    "senders": ["+12069090025"],
-    "patterns": ["^/"]
-  },
+  "version": "1.0.0",
+  "status": "implemented",
   "tommy_phone": "+12069090025",
   "polling_interval_ms": 2000,
   "session_type": "imessage",
   "code_length": 2,
   "priority": "CRITICAL",
-  "max_message_length": 4000,
-  "retry_attempts": 3,
-  "retry_delay_ms": 2000
+  "lock_file": "imessage-bot.lock",
+  "log_file": "/tmp/imessage-bot.log",
+  "max_processed_ids": 100,
+  "database_path": "~/Library/Messages/chat.db"
 }
