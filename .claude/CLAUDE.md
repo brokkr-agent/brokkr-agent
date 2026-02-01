@@ -29,6 +29,37 @@ This directory contains Claude Code customizations for the Brokkr agent system.
 ### Location
 All skills MUST be in `.claude/skills/<name>/` to be auto-discovered by Claude Code.
 
+### CRITICAL: What SKILL.md Must NOT Contain
+
+**NEVER include startup/invocation instructions in SKILL.md files.**
+
+SKILL.md is read BY Claude when it's already running to handle a task. Including instructions like:
+- "Start the bot with `node imessage-bot.js`"
+- "Run `./scripts/bot-control.sh start`"
+- "Launch the service with..."
+
+...would instruct Claude to spawn ANOTHER instance of Claude, which is incorrect.
+
+**SKILL.md Purpose:**
+- Tools Claude can use to gain MORE context (scripts, lib functions, data files)
+- Permissions and constraints for this skill domain
+- How to format responses for this channel
+- Security rules specific to this skill
+
+**What belongs elsewhere:**
+- Bot startup instructions → Root `CLAUDE.md`
+- Process management → `scripts/bot-control.sh`
+- PM2 configuration → `ecosystem.config.cjs`
+
+### Context Injection Pattern
+
+When Claude is invoked to handle a task:
+1. **Pre-injection (by worker.js):** Contact record, last 10 messages, security instructions
+2. **SKILL.md (read by Claude):** Additional tools for deeper investigation if needed
+3. **Scripts (created/used by Claude):** Reusable scripts in `.claude/skills/<name>/scripts/`
+
+Claude should NEVER need to start services - they're already running and invoked it.
+
 ### Required Files
 
 **SKILL.md** (required):

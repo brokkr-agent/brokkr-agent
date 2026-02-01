@@ -158,27 +158,26 @@ $(getconf DARWIN_USER_DIR)/com.apple.notificationcenter/db2/db
 ```
 Note: Sequoia requires TCC authorization.
 
-## Running
+## Additional Context Tools
 
-### Via PM2 (Recommended)
+When handling a notification-triggered task:
 
-```bash
-./scripts/bot-control.sh start  # Starts all services
-./scripts/bot-control.sh status # Check status
-```
+### Available Library Functions
 
-### Manual
+| Module | Functions | Purpose |
+|--------|-----------|---------|
+| `lib/notification-db.js` | `readNotifications()`, `getRecentNotifications()` | Read from notification database |
+| `lib/notification-parser.js` | `parseNotificationPayload()` | Parse binary plist content |
+| `lib/notification-rules.js` | `evaluateRules()`, `matchRule()` | Rule evaluation |
+| `lib/notification-handlers.js` | App-specific handlers | Per-app notification processing |
 
-```bash
-# Live mode
-node notification-monitor.js
+### Context Files
 
-# Dry-run mode (no actions)
-node notification-monitor.js --dry-run
-
-# Verbose output
-node notification-monitor.js --verbose --debug
-```
+| File | Purpose |
+|------|---------|
+| `/tmp/brokkr-notification-context.json` | Current notification context (written by monitor) |
+| `.notification-state.json` | Processing state and history |
+| `.claude/skills/notifications/config.json` | Rules configuration |
 
 ## State Management
 

@@ -79,27 +79,46 @@ Send commands from Tommy's phone:
 - `/<xx> allow` - Approve pending request
 - `/<xx> deny` - Deny pending request
 
-### Process Management
-```bash
-# Start via PM2 - standard mode (Tommy only)
-./scripts/bot-control.sh start
+## Additional Context Tools
 
-# Start via PM2 - universal mode (all contacts)
-./scripts/bot-control.sh start --universal
+Location for scripts: `.claude/skills/imessage/scripts/`
 
-# Start manually for debugging
-./scripts/bot-control.sh live
+When the pre-injected 10 messages aren't enough, use these tools:
 
-# Start in dry-run mode
-./scripts/bot-control.sh test
+### Available Scripts
 
-# Check status
-./scripts/bot-control.sh status
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `imessage-history.js` | Extended message history | `node .claude/skills/imessage/scripts/imessage-history.js +1555... 50` |
+| `imessage-search.js` | Search conversations | `node .claude/skills/imessage/scripts/imessage-search.js +1555... "keyword"` |
+| `imessage-group.js` | Group chat context | `node .claude/skills/imessage/scripts/imessage-group.js "chat-guid"` |
+| `log-suspicious.js` | Log security concerns | `node .claude/skills/imessage/scripts/log-suspicious.js "+1555..." "description"` |
 
-# View logs
-./scripts/bot-control.sh logs
-tail -f /tmp/imessage-bot.log
-```
+### Available Library Functions
+
+Read and use these modules directly:
+
+| Module | Functions | Purpose |
+|--------|-----------|---------|
+| `lib/imessage-reader.js` | `getRecentMessages()`, `getAllRecentMessages()`, `getGroupMessages()`, `getGroupMembers()` | Read from chat.db |
+| `lib/imessage-sender.js` | `sendMessage()`, `safeSendMessage()` | Send via AppleScript |
+| `lib/imessage-permissions.js` | `getContact()`, `updateContact()`, `getOrCreateContact()` | Manage contact records |
+| `lib/imessage-pending.js` | `addPendingQuestion()`, `getPendingQuestions()`, `resolvePending()` | Approval queue |
+| `lib/imessage-context.js` | `getConversationContext()`, `buildSystemContext()` | Context building |
+| `lib/imessage-consultation.js` | `shouldConsultTommy()`, `sendConsultation()` | Consultation flow |
+| `lib/group-monitor.js` | `GroupMonitor` class | Group chat state machine |
+| `lib/command-permissions.js` | `checkCommandAccess()`, `hasCommandPermission()` | Command access control |
+
+### Creating New Scripts
+
+If a reusable script would help but doesn't exist:
+
+1. **Create in:** `.claude/skills/imessage/scripts/`
+2. **Naming:** `imessage-<action>.js` (e.g., `imessage-summarize.js`)
+3. **Arguments:** Accept phone/params via CLI args
+4. **Output:** JSON to stdout for easy parsing
+5. **Document:** Add to this SKILL.md tools table
+6. **Reusable:** Design for future use, not one-off
 
 ## Configuration
 
@@ -137,8 +156,7 @@ tail -f /tmp/imessage-bot.log
 | `lib/command-permissions.js` | Command access control |
 | `.claude/skills/imessage/contacts.json` | Contact permissions storage |
 | `.claude/skills/imessage/pending-questions.json` | Approval queue storage |
-| `ecosystem.config.cjs` | PM2 configuration |
-| `scripts/bot-control.sh` | Process management |
+| `.claude/skills/imessage/security-log.json` | Suspicious behavior log |
 
 ## Contact Trust Levels
 

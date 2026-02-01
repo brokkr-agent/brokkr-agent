@@ -190,7 +190,9 @@ node skills/brokkr-mvp/validation/test-callback.js
 - `lib/notification-rules.js` - Trigger rules engine
 - `lib/notification-handlers.js` - App-specific notification handlers
 
-## Starting the Bot
+## Process Management
+
+All bot processes are managed via `scripts/bot-control.sh`:
 
 ```bash
 cd /Users/brokkrbot/brokkr-agent
@@ -198,7 +200,43 @@ cd /Users/brokkrbot/brokkr-agent
 # Start all services via PM2 (recommended)
 ./scripts/bot-control.sh start
 
-# Or start individual services manually
+# Start with universal iMessage access (all contacts, not just Tommy)
+./scripts/bot-control.sh start --universal
+
+# Stop all services
+./scripts/bot-control.sh stop
+
+# Restart services
+./scripts/bot-control.sh restart
+
+# Check status
+./scripts/bot-control.sh status
+
+# View logs
+./scripts/bot-control.sh logs
+
+# Follow logs in real-time
+./scripts/bot-control.sh tail
+
+# Start in LIVE mode (no auto-restart, for debugging)
+./scripts/bot-control.sh live
+
+# Start in DRY-RUN mode (no real execution)
+./scripts/bot-control.sh test
+```
+
+### Log Files
+
+| Log | Location |
+|-----|----------|
+| WhatsApp bot | `/tmp/whatsapp-bot.log` |
+| iMessage bot | `/tmp/imessage-bot.log` |
+| Webhook server | `/tmp/webhook-server.log` |
+| Notification monitor | `/tmp/notification-monitor.log` |
+
+### Individual Services (manual start)
+
+```bash
 node whatsapp-bot.js
 node imessage-bot.js
 node notification-monitor.js
