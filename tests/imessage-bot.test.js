@@ -1,0 +1,544 @@
+// tests/imessage-bot.test.js
+/**
+ * Tests for iMessage Bot Main Process
+ *
+ * Tests helper functions for:
+ * 1. Lock file management (acquire/release, stale lock detection)
+ * 2. Message filtering (skip processed, skip own messages)
+ * 3. Command parsing and routing
+ * 4. Session creation with iMessage type
+ */
+import { describe, it, expect, beforeEach, afterEach, afterAll, jest } from '@jest/globals';
+import { join } from 'path';
+import { existsSync, rmSync, writeFileSync, readFileSync, mkdirSync } from 'fs';
+
+// Set up test directories before importing modules
+const TEST_DIR = join(process.cwd(), 'test-imessage-bot');
+const TEST_JOBS_DIR = join(TEST_DIR, 'jobs');
+process.env.JOBS_DIR = TEST_JOBS_DIR;
+
+// Create test directory structure
+if (!existsSync(TEST_DIR)) {
+  mkdirSync(TEST_DIR, { recursive: true });
+}
+if (!existsSync(TEST_JOBS_DIR)) {
+  mkdirSync(TEST_JOBS_DIR, { recursive: true });
+}
+
+// Import the module under test
+// Note: The module doesn't exist yet - tests should fail initially
+const imessageBotModule = await import('../imessage-bot.js').catch(() => null);
+
+describe('imessage-bot', () => {
+  // Cleanup before each test
+  beforeEach(() => {
+    const lockFile = join(TEST_DIR, 'imessage-bot.lock');
+    if (existsSync(lockFile)) {
+      rmSync(lockFile, { force: true });
+    }
+  });
+
+  // Cleanup after all tests
+  afterAll(() => {
+    if (existsSync(TEST_DIR)) {
+      rmSync(TEST_DIR, { recursive: true, force: true });
+    }
+  });
+
+  describe('module exports', () => {
+    it('exports acquireLock function', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(typeof imessageBotModule.acquireLock).toBe('function');
+    });
+
+    it('exports releaseLock function', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(typeof imessageBotModule.releaseLock).toBe('function');
+    });
+
+    it('exports filterNewMessages function', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(typeof imessageBotModule.filterNewMessages).toBe('function');
+    });
+
+    it('exports processCommand function', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(typeof imessageBotModule.processCommand).toBe('function');
+    });
+
+    it('exports TOMMY_PHONE constant', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(imessageBotModule.TOMMY_PHONE).toBe('+12069090025');
+    });
+
+    it('exports POLLING_INTERVAL_MS constant', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(imessageBotModule.POLLING_INTERVAL_MS).toBe(2000);
+    });
+  });
+
+  describe('acquireLock', () => {
+    it('creates lock file with PID and timestamp', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const lockPath = join(TEST_DIR, 'imessage-bot.lock');
+      const result = imessageBotModule.acquireLock(lockPath);
+
+      expect(result).toBe(true);
+      expect(existsSync(lockPath)).toBe(true);
+
+      const lockData = JSON.parse(readFileSync(lockPath, 'utf-8'));
+      expect(lockData).toHaveProperty('pid');
+      expect(lockData).toHaveProperty('startedAt');
+      expect(typeof lockData.pid).toBe('number');
+      expect(typeof lockData.startedAt).toBe('string');
+    });
+
+    it('returns false if lock already exists for running process', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const lockPath = join(TEST_DIR, 'imessage-bot.lock');
+
+      // Create lock file with current process PID (which is definitely running)
+      writeFileSync(lockPath, JSON.stringify({
+        pid: process.pid,
+        startedAt: new Date().toISOString()
+      }));
+
+      const result = imessageBotModule.acquireLock(lockPath);
+      expect(result).toBe(false);
+    });
+
+    it('removes stale lock file and acquires if process not running', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const lockPath = join(TEST_DIR, 'imessage-bot.lock');
+
+      // Create lock file with a PID that doesn't exist (99999999)
+      writeFileSync(lockPath, JSON.stringify({
+        pid: 99999999,
+        startedAt: new Date().toISOString()
+      }));
+
+      const result = imessageBotModule.acquireLock(lockPath);
+      expect(result).toBe(true);
+
+      const lockData = JSON.parse(readFileSync(lockPath, 'utf-8'));
+      expect(lockData.pid).toBe(process.pid);
+    });
+
+    it('removes invalid lock file and acquires', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const lockPath = join(TEST_DIR, 'imessage-bot.lock');
+
+      // Create invalid lock file (not valid JSON)
+      writeFileSync(lockPath, 'invalid json content');
+
+      const result = imessageBotModule.acquireLock(lockPath);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('releaseLock', () => {
+    it('removes lock file if owned by current process', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const lockPath = join(TEST_DIR, 'imessage-bot.lock');
+
+      // Create lock file owned by current process
+      writeFileSync(lockPath, JSON.stringify({
+        pid: process.pid,
+        startedAt: new Date().toISOString()
+      }));
+
+      imessageBotModule.releaseLock(lockPath);
+      expect(existsSync(lockPath)).toBe(false);
+    });
+
+    it('does not remove lock file owned by different process', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const lockPath = join(TEST_DIR, 'imessage-bot.lock');
+
+      // Create lock file owned by different process
+      writeFileSync(lockPath, JSON.stringify({
+        pid: 12345,
+        startedAt: new Date().toISOString()
+      }));
+
+      imessageBotModule.releaseLock(lockPath);
+      expect(existsSync(lockPath)).toBe(true);
+    });
+
+    it('handles non-existent lock file gracefully', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const lockPath = join(TEST_DIR, 'imessage-bot.lock');
+
+      // Ensure file doesn't exist
+      if (existsSync(lockPath)) {
+        rmSync(lockPath);
+      }
+
+      // Should not throw
+      expect(() => imessageBotModule.releaseLock(lockPath)).not.toThrow();
+    });
+  });
+
+  describe('filterNewMessages', () => {
+    it('filters out already processed message IDs', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: '/help', sender: '+12069090025', timestamp: 1000 },
+        { id: 2, text: '/status', sender: '+12069090025', timestamp: 1001 },
+        { id: 3, text: '/claude test', sender: '+12069090025', timestamp: 1002 },
+      ];
+
+      const processedIds = new Set([1, 2]);
+
+      const result = imessageBotModule.filterNewMessages(messages, processedIds);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe(3);
+    });
+
+    it('filters out messages from self (sender === "me")', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: '/help', sender: 'me', timestamp: 1000 },
+        { id: 2, text: '/status', sender: '+12069090025', timestamp: 1001 },
+        { id: 3, text: '/claude test', sender: 'me', timestamp: 1002 },
+      ];
+
+      const processedIds = new Set();
+
+      const result = imessageBotModule.filterNewMessages(messages, processedIds);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe(2);
+    });
+
+    it('filters out non-command messages (not starting with /)', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: 'hello', sender: '+12069090025', timestamp: 1000 },
+        { id: 2, text: '/status', sender: '+12069090025', timestamp: 1001 },
+        { id: 3, text: 'test message', sender: '+12069090025', timestamp: 1002 },
+      ];
+
+      const processedIds = new Set();
+
+      const result = imessageBotModule.filterNewMessages(messages, processedIds);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe(2);
+    });
+
+    it('filters out bot response messages by prefix', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: '[DRY-RUN] Test response', sender: '+12069090025', timestamp: 1000 },
+        { id: 2, text: 'Bot online! Use /help', sender: '+12069090025', timestamp: 1001 },
+        { id: 3, text: 'Bot Status: IDLE', sender: '+12069090025', timestamp: 1002 },
+        { id: 4, text: '/status', sender: '+12069090025', timestamp: 1003 },
+      ];
+
+      const processedIds = new Set();
+
+      const result = imessageBotModule.filterNewMessages(messages, processedIds);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe(4);
+    });
+
+    it('returns empty array when all messages are filtered', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: 'hello', sender: 'me', timestamp: 1000 },
+        { id: 2, text: 'hi', sender: '+12069090025', timestamp: 1001 },
+      ];
+
+      const processedIds = new Set();
+
+      const result = imessageBotModule.filterNewMessages(messages, processedIds);
+      expect(result).toHaveLength(0);
+    });
+
+    it('handles empty messages array', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const result = imessageBotModule.filterNewMessages([], new Set());
+      expect(result).toHaveLength(0);
+    });
+
+    it('handles null/undefined text gracefully', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: null, sender: '+12069090025', timestamp: 1000 },
+        { id: 2, text: undefined, sender: '+12069090025', timestamp: 1001 },
+        { id: 3, text: '/help', sender: '+12069090025', timestamp: 1002 },
+      ];
+
+      const processedIds = new Set();
+
+      const result = imessageBotModule.filterNewMessages(messages, processedIds);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe(3);
+    });
+  });
+
+  describe('processCommand', () => {
+    // Clear queue between tests
+    beforeEach(async () => {
+      const queueModule = await import('../lib/queue.js');
+      queueModule.clearQueue();
+    });
+
+    it('handles /help command', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+
+      const result = await imessageBotModule.processCommand({
+        text: '/help',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      expect(result.type).toBe('help');
+      expect(mockSendMessage).toHaveBeenCalled();
+      const sentMessage = mockSendMessage.mock.calls[0][1];
+      expect(sentMessage).toContain('/claude');
+    });
+
+    it('handles /status command', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+
+      const result = await imessageBotModule.processCommand({
+        text: '/status',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      expect(result.type).toBe('status');
+      expect(mockSendMessage).toHaveBeenCalled();
+      const sentMessage = mockSendMessage.mock.calls[0][1];
+      expect(sentMessage).toContain('Bot Status');
+    });
+
+    it('handles /sessions command', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+
+      const result = await imessageBotModule.processCommand({
+        text: '/sessions',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      expect(result.type).toBe('sessions');
+      expect(mockSendMessage).toHaveBeenCalled();
+    });
+
+    it('handles /claude <task> command and creates session', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+
+      const result = await imessageBotModule.processCommand({
+        text: '/claude list files in this project',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      expect(result.type).toBe('claude');
+      expect(result.sessionCode).toBeDefined();
+      expect(result.sessionCode).toHaveLength(2); // iMessage sessions get 2-char codes
+      expect(mockSendMessage).toHaveBeenCalled();
+    });
+
+    it('creates session with type "imessage"', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Clear sessions first
+      sessionsModule.clearSessions();
+
+      await imessageBotModule.processCommand({
+        text: '/claude test task',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      // Check that session was created with type 'imessage'
+      const sessions = sessionsModule.listSessions('imessage');
+      expect(sessions.length).toBeGreaterThan(0);
+      expect(sessions[0].type).toBe('imessage');
+    });
+
+    it('handles session resume command (/<xx>)', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Clear and create a session
+      sessionsModule.clearSessions();
+      const session = sessionsModule.createSession({
+        type: 'imessage',
+        task: 'Original task',
+        chatId: '+12069090025'
+      });
+
+      const result = await imessageBotModule.processCommand({
+        text: `/${session.code}`,
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      expect(result.type).toBe('session_resume');
+      expect(result.sessionCode).toBe(session.code);
+    });
+
+    it('handles session resume with message (/<xx> <message>)', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Clear and create a session
+      sessionsModule.clearSessions();
+      const session = sessionsModule.createSession({
+        type: 'imessage',
+        task: 'Original task',
+        chatId: '+12069090025'
+      });
+
+      const result = await imessageBotModule.processCommand({
+        text: `/${session.code} continue with next steps`,
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      expect(result.type).toBe('session_resume');
+      expect(result.sessionCode).toBe(session.code);
+      expect(result.message).toBe('continue with next steps');
+    });
+
+    it('handles unknown command gracefully', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+
+      const result = await imessageBotModule.processCommand({
+        text: '/unknowncommand',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      expect(result.type).toBe('unknown');
+      expect(mockSendMessage).toHaveBeenCalled();
+      const sentMessage = mockSendMessage.mock.calls[0][1];
+      expect(sentMessage).toContain('Unknown command');
+    });
+
+    it('handles session not found for resume', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Clear all sessions
+      sessionsModule.clearSessions();
+
+      const result = await imessageBotModule.processCommand({
+        text: '/zz',  // Non-existent session code
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      expect(result.type).toBe('session_not_found');
+      expect(mockSendMessage).toHaveBeenCalled();
+      const sentMessage = mockSendMessage.mock.calls[0][1];
+      expect(sentMessage).toContain('Session not found');
+    });
+
+    it('enqueues job for /claude command', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const mockSendMessage = jest.fn().mockResolvedValue({ success: true });
+      const queueModule = await import('../lib/queue.js');
+
+      // Clear queue
+      queueModule.clearQueue();
+
+      await imessageBotModule.processCommand({
+        text: '/claude test task',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSendMessage
+      });
+
+      // Check job was enqueued
+      const depth = queueModule.getQueueDepth();
+      expect(depth).toBe(1);
+
+      const job = queueModule.getNextJob();
+      expect(job.task).toBe('test task');
+      expect(job.source).toBe('imessage');
+    });
+  });
+
+  describe('bot response patterns', () => {
+    // Test that the bot properly identifies its own responses to skip
+    const BOT_RESPONSE_PREFIXES = [
+      '[DRY-RUN]',
+      'Bot online',
+      'Starting',
+      'Unknown command:',
+      'Working on:',
+      'Bot Status:',
+      'Session not found',
+      'Resuming session',
+      'Active Sessions:',
+      'No active sessions',
+    ];
+
+    it('recognizes all bot response prefixes', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      for (const prefix of BOT_RESPONSE_PREFIXES) {
+        const messages = [
+          { id: 1, text: `${prefix} some content`, sender: '+12069090025', timestamp: 1000 },
+        ];
+
+        const result = imessageBotModule.filterNewMessages(messages, new Set());
+        expect(result).toHaveLength(0);
+      }
+    });
+
+    it('recognizes help text output as bot response', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const helpTextMessage = `/claude <task>
+  Start a new Claude task
+
+/help
+  Show this help message`;
+
+      const messages = [
+        { id: 1, text: helpTextMessage, sender: '+12069090025', timestamp: 1000 },
+      ];
+
+      const result = imessageBotModule.filterNewMessages(messages, new Set());
+      expect(result).toHaveLength(0);
+    });
+  });
+});
