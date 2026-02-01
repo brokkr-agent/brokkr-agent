@@ -381,6 +381,117 @@ If any command fails with "not authorized", re-check the Automation permissions 
 - **iCloud sync** - All Apple apps sync via iCloud, respect sync delays
 - **Privacy** - Credentials in CLAUDE.md, don't log sensitive content
 
+## Required Review: BrokkrMVP Webhook Integration (GitHub Issue #1)
+
+**IMPORTANT: Review and fully understand before making ANY webhook changes.**
+
+Issue: https://github.com/brokkr-agent/brokkr-agent/issues/1
+
+The BrokkrMVP dev team has posted a comprehensive webhook integration protocol that supersedes the current webhook implementation. This must be reviewed and understood before any webhook modifications.
+
+### Key Changes from Issue #1
+
+| Current | New Protocol |
+|---------|--------------|
+| Simple POST /webhook | HMAC-signed webhooks with X-Agent-Id, X-Timestamp, X-Signature headers |
+| Agent polls for status | Agent sends callbacks to BrokkrMVP callback endpoint |
+| No heartbeat | 30-second heartbeat required |
+| Simple accept/reject | Fat payload with full task context |
+| Basic status | Status values: processing, needs_input, completed, failed |
+| No usage tracking | Token usage tracking required in callbacks |
+
+### New Endpoints Required
+
+1. **Webhook Endpoint (update existing)**
+   - Add HMAC signature verification
+   - Handle new event types: `task.created`, `task.clarification`, `task.cancelled`
+
+2. **Callback System (new)**
+   - Send results to `POST https://api.brokkr.app/api/agent/callback/{task_id}`
+   - Include usage data, session_code, output_data
+
+3. **Heartbeat System (new)**
+   - Send heartbeat every 30 seconds to `POST https://api.brokkr.app/api/agent/heartbeat`
+   - Include queue_depth, status, capabilities
+
+### Implementation Checklist (from Issue #1)
+
+- [ ] HMAC signature verification on incoming webhooks
+- [ ] Handle `task.created`, `task.clarification`, `task.cancelled` events
+- [ ] Send callbacks with proper status (processing, needs_input, completed, failed)
+- [ ] Implement 30-second heartbeat
+- [ ] Track token usage in callbacks
+- [ ] Include session_code in callbacks
+
+### Review Steps Before Implementation
+
+1. Read full Issue #1 specification
+2. Compare with current `lib/webhook-server.js` implementation
+3. Identify breaking changes and migration path
+4. Create implementation plan
+5. Get Tommy's approval before proceeding
+
+---
+
+## Architecture Improvements (Recommendations)
+
+Based on architecture evaluation (2026-01-31), the following improvements are recommended:
+
+### 1. Add `requiresAgent` to Command Schema
+
+Explicit classification of whether a command needs Claude invocation:
+
+```javascript
+// lib/command-schema.js
+{
+  requiresAgent: boolean,  // true = queue for Claude, false = execute immediately
+}
+```
+
+**Benefits:**
+- Clearer logical processor flow
+- Commands self-document their execution path
+- Easier to add new command types
+
+### 2. Add `skills` Array to Command Schema
+
+Auto-load related skills when command executes:
+
+```javascript
+// lib/command-schema.js
+{
+  skills: ['research', 'web-search'],  // Skills to load before execution
+}
+```
+
+**Benefits:**
+- Commands bring their own context
+- No manual skill loading required
+- Consistent skill usage across channels
+
+### 3. Integrate Executor Pattern
+
+Route all commands through `executor.js` for consistency:
+
+```
+Current:  whatsapp-bot.js → directly calls queue/handlers
+Proposed: whatsapp-bot.js → executor.js → queue/handlers
+```
+
+**Benefits:**
+- Single point of command execution
+- Easier to add hooks (before/after execution)
+- Consistent behavior across all input channels
+
+### 4. Complete Skill System
+
+Skills exist but invocation is not fully implemented:
+
+- [ ] Load skill.md from `skills/<name>/` directory
+- [ ] Execute skill scripts (.sh, .scpt) with proper context
+- [ ] Pass skill output back to agent or user
+- [ ] Track skill usage for self-improvement
+
 ## Success Criteria
 
 1. Tommy can command Brokkr from iMessage with same syntax as WhatsApp
