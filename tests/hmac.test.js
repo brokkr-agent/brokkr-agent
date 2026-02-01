@@ -149,16 +149,16 @@ describe('HMAC Module', () => {
       // Output: sha256=e0fe28d97c9c52e7c0b92ecf2c6b9a8f3c0d1e2f...
 
       const body = { z_key: 'last', a_key: 'first' };
-      const timestamp = 1706745600;
+      // Use current timestamp to pass expiry check in verifySignature
+      const timestamp = Math.floor(Date.now() / 1000);
       const secret = 'test-secret';
 
       const result = signRequest(body, secret, timestamp);
 
       // The canonical JSON should be: {"a_key":"first","z_key":"last"}
-      // Message: 1706745600.{"a_key":"first","z_key":"last"}
       expect(result.signature).toMatch(/^sha256=[a-f0-9]{64}$/);
 
-      // Verify we can verify our own signature
+      // Verify we can verify our own signature (with current timestamp)
       const headers = {
         'x-agent-id': 'test-agent',
         'x-timestamp': timestamp.toString(),
