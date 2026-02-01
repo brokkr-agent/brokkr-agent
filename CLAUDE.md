@@ -62,6 +62,10 @@ Use these credentials to log into any service that requires authentication (GitH
 - **File System**: Read/write access to the workspace at `/Users/brokkrbot/brokkr-agent`
 - **Git**: Configured as "Brokkr Assist" <brokkrassist@icloud.com>
 
+### Implemented Capabilities
+
+- **System Notifications**: Monitors macOS Notification Center, triggers actions based on rules
+
 ### Planned Capabilities (see docs/concepts/)
 
 - **iMessage**: Commands + urgent notifications to Tommy
@@ -69,7 +73,6 @@ Use these credentials to log into any service that requires authentication (GitH
 - **Apple Calendar**: View, create, manage events
 - **Apple Notes**: Create, search, append notes
 - **Apple Reminders**: Create, list, complete reminders
-- **System Notifications**: React to macOS notification triggers
 
 ## Network Access
 
@@ -97,6 +100,36 @@ Use these credentials to log into any service that requires authentication (GitH
 - `DELETE /webhook/<xxx>` - Cancel pending/active job
 - `GET /health` - Health check
 
+## Notification Monitor
+
+Monitors macOS Notification Center and triggers actions based on configurable rules.
+
+**Process:** `notification-monitor.js`
+**Config:** `.claude/skills/notifications/config.json`
+**Log:** `/tmp/notification-monitor.log`
+
+**Running:**
+```bash
+# Via bot-control (recommended)
+./scripts/bot-control.sh start
+
+# Manual
+node notification-monitor.js --live --debug
+```
+
+**Supported Apps:**
+| App | Bundle ID | Friendly Name |
+|-----|-----------|---------------|
+| Messages | com.apple.MobileSMS | imessage |
+| Mail | com.apple.mail | mail |
+| Calendar | com.apple.iCal | calendar |
+| FaceTime | com.apple.FaceTime | facetime |
+| Reminders | com.apple.reminders | reminders |
+
+**Rule Actions:** `invoke` (queue task), `log` (console), `webhook` (HTTP POST), `ignore`
+
+**See:** `.claude/skills/notifications/SKILL.md` for full documentation.
+
 ## BrokkrMVP Integration
 
 The webhook server implements the BrokkrMVP protocol for authenticated task processing.
@@ -120,6 +153,7 @@ node skills/brokkr-mvp/validation/test-callback.js
 ## Files
 
 - `whatsapp-bot.js` - Main entry point
+- `notification-monitor.js` - macOS Notification Center monitor
 - `lib/queue.js` - Priority job queue
 - `lib/sessions.js` - Session management
 - `lib/worker.js` - Task execution
@@ -128,6 +162,10 @@ node skills/brokkr-mvp/validation/test-callback.js
 - `lib/message-parser.js` - WhatsApp command parser
 - `lib/command-registry.js` - Command registry and lookup
 - `lib/executor.js` - Claude Code executor
+- `lib/notification-db.js` - Notification Center database reader
+- `lib/notification-parser.js` - Binary plist parser for notifications
+- `lib/notification-rules.js` - Trigger rules engine
+- `lib/notification-handlers.js` - App-specific notification handlers
 
 ## Starting the Bot
 

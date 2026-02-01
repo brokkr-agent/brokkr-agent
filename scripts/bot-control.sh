@@ -17,6 +17,7 @@ PLIST="$HOME/Library/LaunchAgents/com.brokkr.whatsapp-claude.plist"
 WORKSPACE="/Users/brokkrbot/brokkr-agent"
 BOT_LOG="/tmp/whatsapp-bot.log"
 WEBHOOK_LOG="/tmp/webhook-server.log"
+NOTIFY_LOG="/tmp/notification-monitor.log"
 
 # Use absolute path for sleep to avoid shell issues
 SLEEP="/bin/sleep"
@@ -29,8 +30,10 @@ kill_all() {
     if command -v npx &> /dev/null; then
         npx pm2 stop whatsapp-bot 2>/dev/null || true
         npx pm2 stop webhook-server 2>/dev/null || true
+        npx pm2 stop notification-monitor 2>/dev/null || true
         npx pm2 delete whatsapp-bot 2>/dev/null || true
         npx pm2 delete webhook-server 2>/dev/null || true
+        npx pm2 delete notification-monitor 2>/dev/null || true
     fi
 
     # Unload launchd if loaded
@@ -39,13 +42,16 @@ kill_all() {
     # Kill any remaining processes by name
     pkill -9 -f "node.*whatsapp-bot" 2>/dev/null || true
     pkill -9 -f "node.*webhook-server" 2>/dev/null || true
+    pkill -9 -f "node.*notification-monitor" 2>/dev/null || true
 
     # Also kill by finding PIDs directly
     pgrep -f "whatsapp-bot" | xargs kill -9 2>/dev/null || true
     pgrep -f "webhook-server" | xargs kill -9 2>/dev/null || true
+    pgrep -f "notification-monitor" | xargs kill -9 2>/dev/null || true
 
-    # Remove lock file
+    # Remove lock files
     rm -f "$WORKSPACE/bot.lock"
+    rm -f "$WORKSPACE/notification-monitor.lock"
 
     # Wait for processes to die
     $SLEEP 1
@@ -53,10 +59,10 @@ kill_all() {
 
 # Verify no processes are running
 verify_stopped() {
-    local count=$(pgrep -f "whatsapp-bot|webhook-server" 2>/dev/null | wc -l)
+    local count=$(pgrep -f "whatsapp-bot|webhook-server|notification-monitor" 2>/dev/null | wc -l)
     if [ "$count" -gt 0 ]; then
         echo "Warning: Some processes still running, force killing..."
-        pgrep -f "whatsapp-bot|webhook-server" | xargs kill -9 2>/dev/null || true
+        pgrep -f "whatsapp-bot|webhook-server|notification-monitor" | xargs kill -9 2>/dev/null || true
         $SLEEP 1
     fi
 }
@@ -101,6 +107,16 @@ start_pm2() {
         npx pm2 logs webhook-server --lines 20 --nostream
         return 1
     fi
+
+    # Start notification-monitor via PM2
+    if [ -z "$mode" ]; then
+        npx pm2 start notification-monitor.js --name notification-monitor --output "$NOTIFY_LOG" --error "$NOTIFY_LOG" -- --live
+    else
+        npx pm2 start notification-monitor.js --name notification-monitor --output "$NOTIFY_LOG" --error "$NOTIFY_LOG" -- --dry-run --debug
+    fi
+
+    echo "Started notification-monitor.js via PM2"
+    $SLEEP 2
 
     echo "All services started successfully via PM2"
     return 0
@@ -179,13 +195,41 @@ start_webhook() {
     return 0
 }
 
+# Start notification monitor manually (no PM2)
+start_notify() {
+    local mode="$1"  # "" for live, "--dry-run" for test
+
+    cd "$WORKSPACE"
+    if [ -z "$mode" ]; then
+        node notification-monitor.js --live > "$NOTIFY_LOG" 2>&1 &
+    else
+        node notification-monitor.js --dry-run --debug > "$NOTIFY_LOG" 2>&1 &
+    fi
+    local pid=$!
+
+    echo "Started notification-monitor.js (PID: $pid)"
+
+    # Wait for startup
+    $SLEEP 2
+
+    # Verify it's running
+    if ! kill -0 $pid 2>/dev/null; then
+        echo "ERROR: notification-monitor.js failed to start!"
+        cat "$NOTIFY_LOG"
+        return 1
+    fi
+
+    echo "notification-monitor.js started successfully"
+    return 0
+}
+
 # Show status from all sources
 show_status() {
     echo "=== PM2 Status ==="
     npx pm2 list 2>/dev/null || echo "PM2 not available"
     echo ""
     echo "=== Process Status ==="
-    ps aux | grep -E "whatsapp-bot|webhook-server" | grep -v grep || echo "No processes running"
+    ps aux | grep -E "whatsapp-bot|webhook-server|notification-monitor" | grep -v grep || echo "No processes running"
     echo ""
     echo "=== LaunchD Status ==="
     launchctl list 2>/dev/null | grep brokkr || echo "Not loaded"
@@ -237,6 +281,10 @@ case "$1" in
             exit 1
         fi
 
+        if ! start_notify ""; then
+            exit 1
+        fi
+
         echo ""
         show_status
         ;;
@@ -251,6 +299,10 @@ case "$1" in
         fi
 
         if ! start_webhook "--dry-run"; then
+            exit 1
+        fi
+
+        if ! start_notify "--dry-run"; then
             exit 1
         fi
 
@@ -276,6 +328,13 @@ case "$1" in
         else
             tail -30 "$WEBHOOK_LOG" 2>/dev/null || echo "No log file"
         fi
+        echo ""
+        echo "=== Notification Monitor Log (last 30 lines) ==="
+        if npx pm2 show notification-monitor &>/dev/null; then
+            npx pm2 logs notification-monitor --lines 30 --nostream 2>/dev/null || tail -30 "$NOTIFY_LOG" 2>/dev/null || echo "No log file"
+        else
+            tail -30 "$NOTIFY_LOG" 2>/dev/null || echo "No log file"
+        fi
         ;;
 
     tail)
@@ -283,7 +342,7 @@ case "$1" in
         if npx pm2 list 2>/dev/null | grep -q "whatsapp-bot"; then
             npx pm2 logs
         else
-            tail -f "$BOT_LOG" "$WEBHOOK_LOG" 2>/dev/null
+            tail -f "$BOT_LOG" "$WEBHOOK_LOG" "$NOTIFY_LOG" 2>/dev/null
         fi
         ;;
 

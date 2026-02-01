@@ -9,6 +9,14 @@ allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 > **For Claude:** This skill is the CENTRAL notification monitor for the Apple Integration suite.
 > See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
 
+## Status: IMPLEMENTED
+
+Core notification monitoring is fully functional:
+- Database polling and binary plist parsing working
+- Trigger rules engine with pattern matching
+- Case-insensitive bundle ID mapping
+- Action handlers for invoke/log/webhook
+
 ## Overview
 
 Monitor macOS Notification Center for notifications from integrated apps (Messages, Mail, Calendar) and invoke the appropriate skills when trigger conditions are met. This skill implements the **Three-Tier Notification Processing** system.
