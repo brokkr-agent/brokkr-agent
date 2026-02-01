@@ -18,6 +18,7 @@ WORKSPACE="/Users/brokkrbot/brokkr-agent"
 BOT_LOG="/tmp/whatsapp-bot.log"
 WEBHOOK_LOG="/tmp/webhook-server.log"
 NOTIFY_LOG="/tmp/notification-monitor.log"
+IMESSAGE_LOG="/tmp/imessage-bot.log"
 
 # Use absolute path for sleep to avoid shell issues
 SLEEP="/bin/sleep"
@@ -31,9 +32,11 @@ kill_all() {
         npx pm2 stop whatsapp-bot 2>/dev/null || true
         npx pm2 stop webhook-server 2>/dev/null || true
         npx pm2 stop notification-monitor 2>/dev/null || true
+        npx pm2 stop imessage-bot 2>/dev/null || true
         npx pm2 delete whatsapp-bot 2>/dev/null || true
         npx pm2 delete webhook-server 2>/dev/null || true
         npx pm2 delete notification-monitor 2>/dev/null || true
+        npx pm2 delete imessage-bot 2>/dev/null || true
     fi
 
     # Unload launchd if loaded
@@ -43,15 +46,18 @@ kill_all() {
     pkill -9 -f "node.*whatsapp-bot" 2>/dev/null || true
     pkill -9 -f "node.*webhook-server" 2>/dev/null || true
     pkill -9 -f "node.*notification-monitor" 2>/dev/null || true
+    pkill -9 -f "node.*imessage-bot" 2>/dev/null || true
 
     # Also kill by finding PIDs directly
     pgrep -f "whatsapp-bot" | xargs kill -9 2>/dev/null || true
     pgrep -f "webhook-server" | xargs kill -9 2>/dev/null || true
     pgrep -f "notification-monitor" | xargs kill -9 2>/dev/null || true
+    pgrep -f "imessage-bot" | xargs kill -9 2>/dev/null || true
 
     # Remove lock files
     rm -f "$WORKSPACE/bot.lock"
     rm -f "$WORKSPACE/notification-monitor.lock"
+    rm -f "$WORKSPACE/imessage-bot.lock"
 
     # Wait for processes to die
     $SLEEP 1
@@ -59,10 +65,10 @@ kill_all() {
 
 # Verify no processes are running
 verify_stopped() {
-    local count=$(pgrep -f "whatsapp-bot|webhook-server|notification-monitor" 2>/dev/null | wc -l)
+    local count=$(pgrep -f "whatsapp-bot|webhook-server|notification-monitor|imessage-bot" 2>/dev/null | wc -l)
     if [ "$count" -gt 0 ]; then
         echo "Warning: Some processes still running, force killing..."
-        pgrep -f "whatsapp-bot|webhook-server|notification-monitor" | xargs kill -9 2>/dev/null || true
+        pgrep -f "whatsapp-bot|webhook-server|notification-monitor|imessage-bot" | xargs kill -9 2>/dev/null || true
         $SLEEP 1
     fi
 }
@@ -116,6 +122,16 @@ start_pm2() {
     fi
 
     echo "Started notification-monitor.js via PM2"
+    $SLEEP 2
+
+    # Start imessage-bot via PM2
+    if [ -z "$mode" ]; then
+        npx pm2 start imessage-bot.js --name imessage-bot --output "$IMESSAGE_LOG" --error "$IMESSAGE_LOG"
+    else
+        npx pm2 start imessage-bot.js --name imessage-bot --output "$IMESSAGE_LOG" --error "$IMESSAGE_LOG" -- --dry-run
+    fi
+
+    echo "Started imessage-bot.js via PM2"
     $SLEEP 2
 
     echo "All services started successfully via PM2"
@@ -223,13 +239,44 @@ start_notify() {
     return 0
 }
 
+# Start imessage-bot manually (no PM2)
+start_imessage() {
+    local mode="$1"  # "" for live, "--dry-run" for test
+
+    cd "$WORKSPACE"
+    node imessage-bot.js $mode > "$IMESSAGE_LOG" 2>&1 &
+    local pid=$!
+
+    echo "Started imessage-bot.js (PID: $pid)"
+
+    # Wait for startup
+    $SLEEP 3
+
+    # Verify it's running
+    if ! kill -0 $pid 2>/dev/null; then
+        echo "ERROR: imessage-bot.js failed to start!"
+        cat "$IMESSAGE_LOG"
+        return 1
+    fi
+
+    # Verify it acquired the lock (not "already running")
+    if grep -q "already running" "$IMESSAGE_LOG"; then
+        echo "ERROR: Another instance was already running!"
+        cat "$IMESSAGE_LOG"
+        return 1
+    fi
+
+    echo "imessage-bot.js started successfully"
+    return 0
+}
+
 # Show status from all sources
 show_status() {
     echo "=== PM2 Status ==="
     npx pm2 list 2>/dev/null || echo "PM2 not available"
     echo ""
     echo "=== Process Status ==="
-    ps aux | grep -E "whatsapp-bot|webhook-server|notification-monitor" | grep -v grep || echo "No processes running"
+    ps aux | grep -E "whatsapp-bot|webhook-server|notification-monitor|imessage-bot" | grep -v grep || echo "No processes running"
     echo ""
     echo "=== LaunchD Status ==="
     launchctl list 2>/dev/null | grep brokkr || echo "Not loaded"
@@ -285,6 +332,10 @@ case "$1" in
             exit 1
         fi
 
+        if ! start_imessage ""; then
+            exit 1
+        fi
+
         echo ""
         show_status
         ;;
@@ -303,6 +354,10 @@ case "$1" in
         fi
 
         if ! start_notify "--dry-run"; then
+            exit 1
+        fi
+
+        if ! start_imessage "--dry-run"; then
             exit 1
         fi
 
@@ -335,6 +390,13 @@ case "$1" in
         else
             tail -30 "$NOTIFY_LOG" 2>/dev/null || echo "No log file"
         fi
+        echo ""
+        echo "=== iMessage Bot Log (last 30 lines) ==="
+        if npx pm2 show imessage-bot &>/dev/null; then
+            npx pm2 logs imessage-bot --lines 30 --nostream 2>/dev/null || tail -30 "$IMESSAGE_LOG" 2>/dev/null || echo "No log file"
+        else
+            tail -30 "$IMESSAGE_LOG" 2>/dev/null || echo "No log file"
+        fi
         ;;
 
     tail)
@@ -342,7 +404,7 @@ case "$1" in
         if npx pm2 list 2>/dev/null | grep -q "whatsapp-bot"; then
             npx pm2 logs
         else
-            tail -f "$BOT_LOG" "$WEBHOOK_LOG" "$NOTIFY_LOG" 2>/dev/null
+            tail -f "$BOT_LOG" "$WEBHOOK_LOG" "$NOTIFY_LOG" "$IMESSAGE_LOG" 2>/dev/null
         fi
         ;;
 
