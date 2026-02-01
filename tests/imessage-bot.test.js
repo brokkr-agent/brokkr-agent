@@ -541,4 +541,115 @@ describe('imessage-bot', () => {
       expect(result).toHaveLength(0);
     });
   });
+
+  describe('filterNewMessages - universal access', () => {
+    it('accepts messages from any phone number when universalAccess is true', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: 'Hello', sender: '+15559999999' },
+        { id: 2, text: '/help', sender: '+15551111111' }
+      ];
+
+      const filtered = imessageBotModule.filterNewMessages(messages, new Set(), { universalAccess: true });
+
+      expect(filtered).toHaveLength(2);
+    });
+
+    it('accepts non-command messages when universalAccess is true', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: 'Hello there!', sender: '+15559999999' }
+      ];
+
+      const filtered = imessageBotModule.filterNewMessages(messages, new Set(), { universalAccess: true });
+
+      expect(filtered).toHaveLength(1);
+    });
+
+    it('still filters out own messages even with universalAccess', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: 'Hello', sender: 'me' }
+      ];
+
+      const filtered = imessageBotModule.filterNewMessages(messages, new Set(), { universalAccess: true });
+
+      expect(filtered).toHaveLength(0);
+    });
+
+    it('still filters by processedIds with universalAccess', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: 'Hello', sender: '+1555' },
+        { id: 2, text: 'World', sender: '+1555' }
+      ];
+      const processedIds = new Set([1]);
+
+      const filtered = imessageBotModule.filterNewMessages(messages, processedIds, { universalAccess: true });
+
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].id).toBe(2);
+    });
+
+    it('still filters out bot responses with universalAccess', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: 'Bot online!', sender: '+15559999999' },
+        { id: 2, text: 'Hello there!', sender: '+15559999999' }
+      ];
+
+      const filtered = imessageBotModule.filterNewMessages(messages, new Set(), { universalAccess: true });
+
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].id).toBe(2);
+    });
+
+    it('still filters out empty text with universalAccess', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: '', sender: '+15559999999' },
+        { id: 2, text: '   ', sender: '+15559999999' },
+        { id: 3, text: null, sender: '+15559999999' },
+        { id: 4, text: 'Valid message', sender: '+15559999999' }
+      ];
+
+      const filtered = imessageBotModule.filterNewMessages(messages, new Set(), { universalAccess: true });
+
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].id).toBe(4);
+    });
+
+    it('default behavior (no options) still requires commands', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: 'Hello there!', sender: '+15559999999' }
+      ];
+
+      // No options parameter - should use default behavior
+      const filtered = imessageBotModule.filterNewMessages(messages, new Set());
+
+      expect(filtered).toHaveLength(0);
+    });
+
+    it('universalAccess: false behaves like default', () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const messages = [
+        { id: 1, text: 'Hello there!', sender: '+15559999999' },
+        { id: 2, text: '/help', sender: '+15559999999' }
+      ];
+
+      const filtered = imessageBotModule.filterNewMessages(messages, new Set(), { universalAccess: false });
+
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].id).toBe(2);
+    });
+  });
 });

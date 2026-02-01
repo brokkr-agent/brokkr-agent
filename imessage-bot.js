@@ -152,12 +152,16 @@ function isBotResponse(text) {
  * Filter new messages that should be processed
  * @param {Array} messages - Array of message objects from imessage-reader
  * @param {Set} processedIds - Set of already processed message IDs
+ * @param {Object} options - Filtering options
+ * @param {boolean} options.universalAccess - When true, accept all messages not just commands (default: false)
  * @returns {Array} Filtered messages ready for processing
  */
-export function filterNewMessages(messages, processedIds = processedMessageIds) {
+export function filterNewMessages(messages, processedIds = processedMessageIds, options = {}) {
   if (!messages || messages.length === 0) {
     return [];
   }
+
+  const { universalAccess = false } = options;
 
   return messages.filter(msg => {
     // Skip if already processed
@@ -181,8 +185,9 @@ export function filterNewMessages(messages, processedIds = processedMessageIds) 
       return false;
     }
 
-    // Only process commands (starting with /)
-    if (!text.startsWith('/')) {
+    // In universal access mode, accept all non-filtered messages
+    // In default mode, only process commands (starting with /)
+    if (!universalAccess && !text.startsWith('/')) {
       return false;
     }
 
