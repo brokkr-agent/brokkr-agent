@@ -15,6 +15,7 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 | Plan | Status | Dependencies | Est. Tasks |
 |------|--------|--------------|------------|
 | [iMessage Skill](./2026-02-01-imessage-skill-plan.md) | Not Started | None | 10 |
+| [iMessage Advanced Assistant](./2026-02-01-imessage-advanced-assistant-plan.md) | Not Started | iMessage Skill | 26 |
 | [Email Skill](./2026-02-01-email-skill-plan.md) | Not Started | None | 15 |
 
 ### Phase 2: Apple Notifications (Priority: High - Foundation for Others)
@@ -54,7 +55,7 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 |------|--------|--------------|------------|
 | [Shortcuts & Automation](./2026-02-01-shortcuts-automation-skill-plan.md) | Not Started | None | 10 |
 
-**Total: 14 plans, ~149 tasks**
+**Total: 15 plans, ~175 tasks**
 
 ## Architecture Principles
 

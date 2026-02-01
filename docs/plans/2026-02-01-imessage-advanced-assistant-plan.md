@@ -17,6 +17,74 @@
 
 ---
 
+## Critical Design Requirements
+
+### Session IDs (Tommy Only)
+
+Every response to Tommy MUST include the session ID so he can resume work:
+- Format: `Session: /<id>` at the end of messages
+- Example: `I've completed the task. Session: /k7`
+- This allows Tommy to run `/<id>` to continue that specific conversation/work
+- **Never include session IDs in responses to other contacts**
+
+### Command Permissions System
+
+Command permission is a **separate, explicit permission** that is NOT included in "full permissions" or "trusted" status.
+
+**Default State:**
+- Tommy is the ONLY contact with command permission by default
+- All other contacts have zero command permissions, even if "trusted"
+
+**Granting Command Permissions:**
+- Must be explicitly granted per-command: `Grant <name> /<command>`
+- Example: `Grant Sarah /status` - Sarah can now use `/status`
+- "Give <name> full permissions" does NOT include command permission
+- Command permissions are stored in `contact.command_permissions: ["/status", "/help"]`
+
+**Command Handling for Non-Tommy Contacts:**
+
+| Contact State | Command Sent | Behavior |
+|---------------|--------------|----------|
+| Has 0 command permissions | `/anything` | **Do NOT acknowledge as command.** Treat as natural message, invoke agent normally (ignoring the `/`), respond as if they typed it accidentally |
+| Has 1+ command permissions | Command they HAVE | Process the command normally |
+| Has 1+ command permissions | Command they DON'T have | Respond: "Command not found", notify Tommy: "<Name> tried /<cmd>" |
+
+**Rationale:**
+- Contacts without ANY command permissions shouldn't know commands exist
+- Contacts with SOME permissions are "in the know" - tell them command wasn't found
+- Tommy always gets notified when someone attempts unauthorized commands
+
+### Contact Metadata Structure (Updated)
+
+```json
+{
+  "+15551234567": {
+    "id": "+15551234567",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": null,
+
+    "trust_level": "not_trusted",
+    "permissions": { ... },
+    "command_permissions": [],      // Explicit list: ["/status", "/help"]
+    "denied_requests": [ ... ],
+    "approved_requests": [ ... ],
+
+    "response_style": "casual",
+    "topics_discussed": ["work", "scheduling"],
+    "sentiment_history": "positive",
+
+    "spam_score": 0,
+    "ignore": false,
+
+    "first_seen": "2026-01-10T08:00:00Z",
+    "last_interaction": "2026-02-01T14:30:00Z"
+  }
+}
+```
+
+---
+
 ## Phase 1: Core Infrastructure
 
 ### Task 1: Contact Permissions Storage Module
@@ -190,6 +258,7 @@ export function createContact(phoneNumber, service = 'iMessage', country = 'us')
     display_name: null,
     trust_level: TRUST_LEVELS.NOT_TRUSTED,
     permissions: {},
+    command_permissions: [],  // Explicit list of allowed commands
     denied_requests: [],
     approved_requests: [],
     response_style: null,
@@ -279,6 +348,7 @@ git commit -m "feat(imessage): add contact permissions storage module
     "display_name": "Tommy",
     "trust_level": "trusted",
     "permissions": {},
+    "command_permissions": ["*"],
     "denied_requests": [],
     "approved_requests": [],
     "response_style": null,
@@ -291,6 +361,8 @@ git commit -m "feat(imessage): add contact permissions storage module
   }
 }
 ```
+
+**Note:** `command_permissions: ["*"]` means Tommy has all command permissions. Other contacts would have explicit lists like `["/status", "/help"]`.
 
 **Step 2: Verify the file is valid JSON**
 
@@ -917,9 +989,203 @@ git commit -m "feat(commands): add /digest command for daily summaries"
 
 ---
 
+### Task 8: Command Permission Checker
+
+**Files:**
+- Create: `lib/command-permissions.js`
+- Test: `tests/lib/command-permissions.test.js`
+
+**Step 1: Write the failing test**
+
+```javascript
+// tests/lib/command-permissions.test.js
+import { describe, it, expect } from 'vitest';
+import {
+  hasCommandPermission,
+  hasAnyCommandPermission,
+  checkCommandAccess
+} from '../../lib/command-permissions.js';
+
+describe('command-permissions', () => {
+  describe('hasCommandPermission', () => {
+    it('returns true for wildcard permission', () => {
+      const contact = { command_permissions: ['*'] };
+      expect(hasCommandPermission(contact, '/claude')).toBe(true);
+      expect(hasCommandPermission(contact, '/status')).toBe(true);
+    });
+
+    it('returns true for specific permission', () => {
+      const contact = { command_permissions: ['/status', '/help'] };
+      expect(hasCommandPermission(contact, '/status')).toBe(true);
+      expect(hasCommandPermission(contact, '/help')).toBe(true);
+    });
+
+    it('returns false for missing permission', () => {
+      const contact = { command_permissions: ['/status'] };
+      expect(hasCommandPermission(contact, '/claude')).toBe(false);
+    });
+
+    it('returns false for empty permissions', () => {
+      const contact = { command_permissions: [] };
+      expect(hasCommandPermission(contact, '/status')).toBe(false);
+    });
+  });
+
+  describe('hasAnyCommandPermission', () => {
+    it('returns true if contact has any command permissions', () => {
+      const contact = { command_permissions: ['/status'] };
+      expect(hasAnyCommandPermission(contact)).toBe(true);
+    });
+
+    it('returns false if contact has no command permissions', () => {
+      const contact = { command_permissions: [] };
+      expect(hasAnyCommandPermission(contact)).toBe(false);
+    });
+  });
+
+  describe('checkCommandAccess', () => {
+    it('returns ALLOWED for permitted commands', () => {
+      const contact = { command_permissions: ['/status'] };
+      const result = checkCommandAccess(contact, '/status');
+      expect(result.access).toBe('allowed');
+    });
+
+    it('returns NOT_FOUND for non-permitted command when contact has some permissions', () => {
+      const contact = { command_permissions: ['/status'] };
+      const result = checkCommandAccess(contact, '/claude');
+      expect(result.access).toBe('not_found');
+      expect(result.notifyTommy).toBe(true);
+    });
+
+    it('returns IGNORE for commands when contact has zero permissions', () => {
+      const contact = { command_permissions: [] };
+      const result = checkCommandAccess(contact, '/status');
+      expect(result.access).toBe('ignore');
+      expect(result.treatAsNatural).toBe(true);
+    });
+  });
+});
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `npm test tests/lib/command-permissions.test.js`
+Expected: FAIL with "Cannot find module"
+
+**Step 3: Write minimal implementation**
+
+```javascript
+// lib/command-permissions.js
+/**
+ * Command Permissions Module
+ *
+ * Handles command access control for non-Tommy contacts.
+ * Command permission is separate from trust level and must be explicitly granted.
+ */
+
+/**
+ * Check if contact has permission for a specific command
+ * @param {Object} contact - Contact object
+ * @param {string} command - Command name (e.g., '/status')
+ * @returns {boolean} True if permitted
+ */
+export function hasCommandPermission(contact, command) {
+  const permissions = contact.command_permissions || [];
+
+  // Wildcard grants all commands
+  if (permissions.includes('*')) {
+    return true;
+  }
+
+  // Normalize command name (ensure starts with /)
+  const normalizedCmd = command.startsWith('/') ? command : `/${command}`;
+
+  return permissions.includes(normalizedCmd);
+}
+
+/**
+ * Check if contact has ANY command permissions
+ * @param {Object} contact - Contact object
+ * @returns {boolean} True if contact has at least one command permission
+ */
+export function hasAnyCommandPermission(contact) {
+  const permissions = contact.command_permissions || [];
+  return permissions.length > 0;
+}
+
+/**
+ * Check command access and determine behavior
+ * @param {Object} contact - Contact object
+ * @param {string} command - Command attempted
+ * @returns {Object} { access: 'allowed'|'not_found'|'ignore', notifyTommy?, treatAsNatural? }
+ */
+export function checkCommandAccess(contact, command) {
+  // Has permission for this specific command
+  if (hasCommandPermission(contact, command)) {
+    return { access: 'allowed' };
+  }
+
+  // Has SOME permissions but not this one -> "Command not found" + notify Tommy
+  if (hasAnyCommandPermission(contact)) {
+    return {
+      access: 'not_found',
+      notifyTommy: true,
+      message: 'Command not found'
+    };
+  }
+
+  // Has NO permissions -> ignore as command, treat as natural message
+  return {
+    access: 'ignore',
+    treatAsNatural: true
+  };
+}
+
+/**
+ * Grant a command permission to a contact
+ * @param {Object} contact - Contact object (mutated)
+ * @param {string} command - Command to grant
+ * @returns {Object} Updated contact
+ */
+export function grantCommandPermission(contact, command) {
+  if (!contact.command_permissions) {
+    contact.command_permissions = [];
+  }
+
+  const normalizedCmd = command.startsWith('/') ? command : `/${command}`;
+
+  if (!contact.command_permissions.includes(normalizedCmd)) {
+    contact.command_permissions.push(normalizedCmd);
+  }
+
+  return contact;
+}
+```
+
+**Step 4: Run test to verify it passes**
+
+Run: `npm test tests/lib/command-permissions.test.js`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add lib/command-permissions.js tests/lib/command-permissions.test.js
+git commit -m "feat(imessage): add command permission checker
+
+- hasCommandPermission checks specific command access
+- hasAnyCommandPermission detects if contact knows commands exist
+- checkCommandAccess returns behavior guidance:
+  - allowed: process command
+  - not_found: respond 'Command not found', notify Tommy
+  - ignore: treat as natural message (don't acknowledge command)"
+```
+
+---
+
 ## Phase 3: Universal Access in imessage-bot.js
 
-### Task 8: Refactor imessage-bot.js to Accept Any Contact
+### Task 9: Refactor imessage-bot.js to Accept Any Contact
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -1090,7 +1356,7 @@ git commit -m "feat(imessage-bot): add isTommyMessage helper function"
 
 ---
 
-### Task 10: Differentiate Pre-Alert Behavior by Contact
+### Task 11: Differentiate Pre-Alert Behavior by Contact
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -1182,7 +1448,7 @@ git commit -m "feat(imessage-bot): differentiate pre-alert messages by contact
 
 ## Phase 4: Consultation Flow
 
-### Task 11: Silent Consultation Handler
+### Task 12: Silent Consultation Handler
 
 **Files:**
 - Create: `lib/imessage-consultation.js`
@@ -1356,7 +1622,7 @@ git commit -m "feat(imessage): add silent consultation flow module
 
 ---
 
-### Task 12: Integrate Consultation into processCommand
+### Task 13: Integrate Consultation into processCommand
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -1463,7 +1729,7 @@ git commit -m "feat(imessage-bot): integrate consultation flow for untrusted con
 
 ---
 
-### Task 13: Handle Consultation Response (/<xx> allow/deny)
+### Task 14: Handle Consultation Response (/<xx> allow/deny)
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -1572,7 +1838,7 @@ git commit -m "feat(imessage-bot): handle consultation allow/deny responses
 
 ## Phase 5: Group Conversation State Machine
 
-### Task 14: Group Monitor Module
+### Task 15: Group Monitor Module
 
 **Files:**
 - Create: `lib/group-monitor.js`
@@ -1834,7 +2100,7 @@ git commit -m "feat(imessage): add group conversation state machine
 
 ---
 
-### Task 15: Add Group Chat Reader Functions
+### Task 16: Add Group Chat Reader Functions
 
 **Files:**
 - Modify: `lib/imessage-reader.js`
@@ -1977,7 +2243,7 @@ git commit -m "feat(imessage-reader): add group chat query functions
 
 ## Phase 6: /questions and /digest Command Handlers
 
-### Task 16: Implement /questions Handler
+### Task 17: Implement .questions Handler
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -2076,7 +2342,7 @@ git commit -m "feat(imessage-bot): implement /questions command handler
 
 ---
 
-### Task 17: Implement /digest Handler (Placeholder)
+### Task 18: Implement .digest Handler (Placeholder)
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -2139,7 +2405,7 @@ git commit -m "feat(imessage-bot): add placeholder /digest handler
 
 ## Phase 7: Full Integration
 
-### Task 18: Update pollMessages for Universal Access
+### Task 19: Update pollMessages for Universal Access
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -2200,7 +2466,7 @@ git commit -m "feat(imessage-bot): enable universal access mode via --universal 
 
 ---
 
-### Task 19: Add getAllRecentMessages to imessage-reader
+### Task 20: Add getAllRecentMessages to imessage-reader
 
 **Files:**
 - Modify: `lib/imessage-reader.js`
@@ -2291,7 +2557,7 @@ git commit -m "feat(imessage-reader): add getAllRecentMessages for universal acc
 
 ---
 
-### Task 20: Update SKILL.md Documentation
+### Task 21: Update SKILL.md Documentation
 
 **Files:**
 - Modify: `.claude/skills/imessage/SKILL.md`
@@ -2384,7 +2650,7 @@ git commit -m "docs(imessage): update SKILL.md with advanced assistant capabilit
 
 ## Phase 8: User Testing
 
-### Task 21: Testing Phase 1 - Tommy Direct Messages
+### Task 22: Testing Phase 1 - Tommy Direct Messages
 
 **Manual Testing Steps:**
 
@@ -2395,29 +2661,39 @@ git commit -m "docs(imessage): update SKILL.md with advanced assistant capabilit
 
 2. **Test 1: Normal messages as /claude**
    - Send from Tommy: "What's the weather today?"
-   - Verify: Treated as /claude, session code displayed
+   - Verify: Treated as /claude
+   - **Verify: Response includes "Session: /xx" at the end**
 
-3. **Test 2: Session codes work**
+3. **Test 2: Session IDs in EVERY response**
+   - Send multiple messages, verify EVERY response to Tommy includes session ID
+   - Format must be: `Session: /<id>` (e.g., "Session: /k7")
+   - This allows Tommy to resume with `/<id>` at any time
+
+4. **Test 3: Session resume works**
    - Send: "/k7 continue"
    - Verify: Session resumes correctly
+   - Verify: Response still includes session ID
 
-4. **Test 3: /questions command**
+5. **Test 4: /questions command**
    - Send: "/questions"
    - Verify: Shows pending (or "no pending")
+   - Verify: Session ID included in response
 
-5. **Test 4: Context retrieval**
+6. **Test 5: Context retrieval**
    - Send: "What did we just talk about?"
-   - Verify: Bot has conversation context
+   - Verify: Bot has conversation context from chat.db
 
 **Validation Criteria:**
 - [ ] Normal messages processed as /claude
-- [ ] Session codes displayed in responses
+- [ ] **Session IDs displayed in EVERY response to Tommy**
+- [ ] Session IDs formatted as "Session: /<id>"
+- [ ] Session resume via /xx works
 - [ ] All commands work
 - [ ] Context retrieved from chat.db
 
 ---
 
-### Task 22: Testing Phase 2 - Multi-Contact Permissions
+### Task 23: Testing Phase 2 - Multi-Contact Permissions
 
 **Prerequisites:**
 - Identify 1-2 test contacts
@@ -2443,15 +2719,35 @@ git commit -m "docs(imessage): update SKILL.md with advanced assistant capabilit
    - Tommy: "/questions"
    - Verify: All pending shown
 
+5. **Command permission tests (zero permissions)**
+   - Have untrusted contact send: "/status"
+   - Verify: Bot treats as natural message, does NOT respond "Command not found"
+   - Verify: Agent invoked as if they typed "status" accidentally
+   - Contact should receive a normal conversational response
+
+6. **Grant command permission**
+   - Tommy sends: "Grant <contact_name> /status"
+   - Verify: Contact now has `/status` in their command_permissions
+
+7. **Command permission tests (some permissions)**
+   - Contact sends: "/status"
+   - Verify: Command executes normally
+   - Contact sends: "/claude hello"
+   - Verify: Bot responds "Command not found"
+   - Verify: Tommy receives notification: "<Name> tried /claude"
+
 **Validation Criteria:**
 - [ ] Untrusted triggers consultation
 - [ ] No session codes to non-Tommy
 - [ ] /questions shows pending
 - [ ] Allow/deny work correctly
+- [ ] Contacts with 0 command permissions: commands treated as natural messages
+- [ ] Contacts with 1+ command permissions: unpermitted commands get "Command not found"
+- [ ] Tommy notified of unauthorized command attempts
 
 ---
 
-### Task 23: Testing Phase 3 - Group Chat
+### Task 24: Testing Phase 3 - Group Chat
 
 **Prerequisites:**
 - Create group chat with Tommy + 1-2 contacts
@@ -2482,7 +2778,7 @@ git commit -m "docs(imessage): update SKILL.md with advanced assistant capabilit
 
 ---
 
-### Task 24: Final Integration Test
+### Task 25: Final Integration Test
 
 **Run all automated tests:**
 ```bash
@@ -2503,7 +2799,7 @@ node scripts/test-imessage.js
 
 ---
 
-### Task 25: Commit Final Changes and Update Sprint
+### Task 26: Commit Final Changes and Update Sprint
 
 **Step 1: Final commit**
 
@@ -2548,6 +2844,6 @@ This plan transforms the iMessage bot into a full AI assistant with:
 5. **Group Conversations** - State machine for intelligent participation
 6. **New Commands** - `/questions` and `/digest` for Tommy
 
-**Total Tasks:** 25
+**Total Tasks:** 26
 **Estimated Time:** 4-6 hours with TDD
 **Primary Contact Method:** iMessage (not WhatsApp)
