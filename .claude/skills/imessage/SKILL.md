@@ -1,6 +1,6 @@
 ---
 name: imessage
-description: iMessage integration for sending/receiving messages via Messages.app. Use for communicating with Tommy via text. This is a core communication channel alongside WhatsApp.
+description: iMessage automation - read/send messages, manage contacts, handle group chats. Primary communication channel for Brokkr assistant.
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -11,26 +11,39 @@ allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 
 ## Status: IMPLEMENTED
 
-Core iMessage integration is fully functional:
+Core iMessage integration and Advanced Assistant are fully functional:
 - SQLite message reading from chat.db
 - AppleScript message sending
 - Command parsing and processing
 - Session management with 2-char codes
 - PM2 process management
+- Universal access mode for any contact
+- Contact permissions and trust levels
+- Silent consultation for untrusted contacts
 
 ## Overview
 
-Enable two-way communication with Tommy via iMessage. Messages from Tommy's phone (+1 206-909-0025) are polled from the Messages.app SQLite database. Commands are processed with the same syntax as WhatsApp. Responses are sent via AppleScript.
+Enable two-way communication via iMessage. In standard mode, only Tommy's phone (+1 206-909-0025) is processed. In universal mode (--universal flag), messages from any contact are processed with automatic trust management.
 
 ## Capabilities
 
-- Poll for new messages from Tommy's phone
+### Core Features
+- Poll for new messages from chat.db
 - Send responses back via AppleScript
 - Process commands with same syntax as WhatsApp
 - Share session pool across all channels
 - 2-character session codes (same as WhatsApp)
 - Automatic startup message on bot start
 - Dry-run mode for testing
+
+### Advanced Assistant (--universal mode)
+- Accept messages from any contact
+- Natural conversation (no / prefix required)
+- Self-expanding permissions system
+- Silent consultation for untrusted contacts
+- Group conversation state machine
+- Contact-specific response styles
+- Approval queue for sensitive requests
 
 ## Architecture
 
@@ -61,11 +74,18 @@ Send commands from Tommy's phone:
 - `/status` - Bot status
 - `/help` - Show commands
 - `/sessions` - List active sessions
+- `/questions` - View pending approval requests
+- `/digest [days]` - View daily digest (default 7 days)
+- `/<xx> allow` - Approve pending request
+- `/<xx> deny` - Deny pending request
 
 ### Process Management
 ```bash
-# Start via PM2 (recommended)
+# Start via PM2 - standard mode (Tommy only)
 ./scripts/bot-control.sh start
+
+# Start via PM2 - universal mode (all contacts)
+./scripts/bot-control.sh start --universal
 
 # Start manually for debugging
 ./scripts/bot-control.sh live
@@ -109,8 +129,32 @@ tail -f /tmp/imessage-bot.log
 | `imessage-bot.js` | Main process, polls and processes messages |
 | `lib/imessage-reader.js` | SQLite database reader |
 | `lib/imessage-sender.js` | AppleScript message sender |
+| `lib/imessage-permissions.js` | Contact trust levels and permissions |
+| `lib/imessage-pending.js` | Approval queue for untrusted contacts |
+| `lib/imessage-context.js` | Conversation context retrieval |
+| `lib/imessage-consultation.js` | Silent consultation flow |
+| `lib/group-monitor.js` | Group chat state machine |
+| `lib/command-permissions.js` | Command access control |
+| `.claude/skills/imessage/contacts.json` | Contact permissions storage |
+| `.claude/skills/imessage/pending-questions.json` | Approval queue storage |
 | `ecosystem.config.cjs` | PM2 configuration |
 | `scripts/bot-control.sh` | Process management |
+
+## Contact Trust Levels
+
+| Level | Description |
+|-------|-------------|
+| `not_trusted` | Default for new contacts, requires consultation |
+| `partial_trust` | Some permissions granted by Tommy |
+| `trusted` | Full access (Tommy only by default) |
+
+## Command Permissions
+
+Command permissions are separate from trust levels:
+- Tommy has `["*"]` (all commands)
+- Other contacts have explicit lists like `["/status", "/help"]`
+- Contacts with 0 command permissions: commands treated as natural messages
+- Contacts with 1+ permissions: unknown commands return "not found"
 
 ## Database Location
 
@@ -169,4 +213,5 @@ The bot skips messages that:
 1. **Polling delay**: 2-second interval (not real-time)
 2. **Read-only database**: Cannot mark messages as read
 3. **iCloud sync**: Messages must sync before polling sees them
-4. **Single recipient**: Only communicates with Tommy's phone
+4. **Standard mode**: Only communicates with Tommy's phone
+5. **Universal mode**: Requires Tommy approval for untrusted contacts
