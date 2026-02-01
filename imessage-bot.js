@@ -29,7 +29,8 @@ import { processNextJob, setSendMessageCallback, setDryRunMode, isProcessing, ge
 import { startupCleanup } from './lib/resources.js';
 import { getBusyMessage, getStatusMessage } from './lib/busy-handler.js';
 import { shouldConsultTommy, sendConsultation } from './lib/imessage-consultation.js';
-import { getPendingByCode, resolvePending } from './lib/imessage-pending.js';
+import { getPendingByCode, resolvePending, getPendingQuestions } from './lib/imessage-pending.js';
+import { getContact } from './lib/imessage-permissions.js';
 
 // Configuration constants
 export const TOMMY_PHONE = '+12069090025';
@@ -408,6 +409,29 @@ async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = t
         await sendMessage(phoneNumber, response);
       }
       return { type: 'sessions' };
+    } else if (handler.function === 'handleQuestions') {
+      const pendingQuestions = getPendingQuestions('pending');
+      if (pendingQuestions.length === 0) {
+        await sendMessage(phoneNumber, 'No pending approval requests.');
+      } else {
+        let response = `Pending Requests (${pendingQuestions.length}):\n\n`;
+        for (const question of pendingQuestions) {
+          // Get contact name (display_name or phone number)
+          const contact = getContact(question.phoneNumber);
+          const contactName = contact?.display_name || question.phoneNumber;
+
+          // Truncate question to 50 chars
+          const truncatedQuestion = question.question.length > 50
+            ? question.question.slice(0, 50) + '...'
+            : question.question;
+
+          response += `/${question.sessionCode} - ${contactName}\n`;
+          response += `  "${truncatedQuestion}"\n\n`;
+        }
+        response += 'Reply: /<code> allow or /<code> deny';
+        await sendMessage(phoneNumber, response);
+      }
+      return { type: 'questions' };
     }
     return { type: 'internal', handler: handler.function };
   }

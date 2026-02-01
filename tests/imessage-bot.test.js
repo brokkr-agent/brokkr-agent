@@ -1147,4 +1147,124 @@ describe('imessage-bot', () => {
       expect(result.action).toBe('allow');
     });
   });
+
+  describe('processCommand - /questions command', () => {
+    // Clear pending questions between tests
+    beforeEach(async () => {
+      const pendingModule = await import('../lib/imessage-pending.js');
+      pendingModule.clearPending();
+    });
+
+    it('lists pending questions when there are some', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const pendingModule = await import('../lib/imessage-pending.js');
+
+      // Add two pending questions (use unique phone numbers to avoid collision with other tests)
+      const q1 = pendingModule.addPendingQuestion({
+        phoneNumber: '+15553333333',
+        question: 'What is the weather today?',
+        context: 'Test context'
+      });
+      const q2 = pendingModule.addPendingQuestion({
+        phoneNumber: '+15554444444',
+        question: 'Can you help me with a very long question that should be truncated in the display?',
+        context: 'Test context'
+      });
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends /questions command
+      const result = await imessageBotModule.processCommand({
+        text: '/questions',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSend
+      });
+
+      // Should return questions type
+      expect(result.type).toBe('questions');
+
+      // Message should be sent
+      expect(sentMessages.length).toBe(1);
+      const response = sentMessages[0].msg;
+
+      // Should contain header with count
+      expect(response).toContain('Pending Requests (2)');
+
+      // Should contain both session codes
+      expect(response).toContain(`/${q1.sessionCode}`);
+      expect(response).toContain(`/${q2.sessionCode}`);
+
+      // Should contain phone numbers (as contact names since no display_name set)
+      expect(response).toContain('+15553333333');
+      expect(response).toContain('+15554444444');
+
+      // Should contain truncated questions
+      expect(response).toContain('What is the weather today?');
+      // Long question should be truncated (50 chars max)
+      expect(response).toContain('Can you help me with a very long question that sho...');
+
+      // Should contain footer with instructions
+      expect(response).toContain('Reply: /<code> allow or /<code> deny');
+    });
+
+    it('shows no pending message when queue is empty', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends /questions command with empty queue
+      const result = await imessageBotModule.processCommand({
+        text: '/questions',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSend
+      });
+
+      // Should return questions type
+      expect(result.type).toBe('questions');
+
+      // Message should be sent
+      expect(sentMessages.length).toBe(1);
+      const response = sentMessages[0].msg;
+
+      // Should contain "no pending" message
+      expect(response).toContain('No pending approval requests');
+    });
+
+    it('uses contact display_name when available', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const pendingModule = await import('../lib/imessage-pending.js');
+      const permissionsModule = await import('../lib/imessage-permissions.js');
+
+      // Create a contact first, then update with display_name
+      permissionsModule.getOrCreateContact('+15551111111', 'iMessage', 'us');
+      permissionsModule.updateContact('+15551111111', { display_name: 'John Doe' });
+
+      // Add a pending question from that contact
+      const q1 = pendingModule.addPendingQuestion({
+        phoneNumber: '+15551111111',
+        question: 'What is the weather?',
+        context: 'Test context'
+      });
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends /questions command
+      const result = await imessageBotModule.processCommand({
+        text: '/questions',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSend
+      });
+
+      expect(result.type).toBe('questions');
+      const response = sentMessages[0].msg;
+
+      // Should use display_name instead of phone number
+      expect(response).toContain('John Doe');
+    });
+  });
 });
