@@ -1,8 +1,47 @@
 # Brokkr Self-Improvement System
 
-**Status:** Concept (requires research before implementation)
+**Status:** In Progress
 **Created:** 2026-01-31
+**Updated:** 2026-02-01
 **Owner:** Tommy Johnson (tommyjohnson90@gmail.com)
+**System:** macOS 14.8.3 (Sonoma) - MacBook Pro 8GB RAM
+
+## Progress Summary
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 0 - macOS Setup | ✅ Complete | All AppleScript permissions verified |
+| BrokkrMVP Webhooks | ✅ Complete | HMAC, callbacks, session resume working |
+| Phase 1 - iMessage | 🔲 Not Started | Next priority |
+| Phase 2 - Email | 🔲 Not Started | |
+| Phase 3 - Apple Apps (Core) | 🔲 Not Started | Calendar, Reminders, Notes, iCloud Sharing |
+| Phase 4 - Apple Apps (Extended) | 🔲 Not Started | Contacts, Safari, Finder, Clipboard, Music |
+| Phase 5 - Screen Recording & Video | 🔲 Not Started | screencapture, Remotion tutorials |
+| Phase 6 - Shortcuts & Automation | 🔲 Not Started | Shortcuts bridge, Focus, Location |
+| Phase 7 - Notifications | 🔲 Not Started | |
+| Phase 8 - Self-Improvement | 🔲 Not Started | |
+| Phase 9 - Refinement | 🔲 Not Started | |
+
+### Research Status
+
+| Service | AppleScript | Status | Notes |
+|---------|-------------|--------|-------|
+| Messages | ✅ Full | Verified | Permissions working |
+| Mail | ✅ Full | Verified | Permissions working |
+| Calendar | ✅ Full | Verified | 5 calendars found |
+| Reminders | ✅ Full | Verified | 1 list found |
+| Notes | ✅ Full | Verified | 1 folder found |
+| Contacts | ✅ Full | Researched | Full dictionary available |
+| Safari | ✅ Full | Researched | + UI scripting |
+| Finder | ✅ Full | Researched | Scriptable + recordable |
+| Shortcuts | ✅ Full | Researched | Via Shortcuts Events |
+| Music | ✅ Full | Researched | Renamed from iTunes |
+| Clipboard | ✅ Built-in | Researched | Native commands |
+| Spotlight | ✅ Via shell | Researched | mdfind/mdls |
+| Screen Recording | ✅ Via shell | Researched | screencapture -v |
+| Focus Modes | ⚠️ Limited | Researched | JXA read, Shortcuts write |
+| Location | ⚠️ Limited | Researched | Use Shortcuts bridge |
+| Podcasts | ❌ None | Researched | No dictionary, SQLite only |
 
 ## Overview
 
@@ -100,6 +139,64 @@ skills/
     list-shared.sh        # List files in shared folder
     get-shared.sh         # Retrieve shared file from Tommy
     sync-status.sh        # Check iCloud sync status
+
+  shortcuts/
+    skill.md
+    run-shortcut.scpt     # Run a Shortcuts app shortcut by name
+    list-shortcuts.scpt   # List available shortcuts
+
+  contacts/
+    skill.md
+    find-contact.scpt     # Find contact by name/email/phone
+    add-contact.scpt      # Create new contact
+    update-contact.scpt   # Modify existing contact
+    list-groups.scpt      # List contact groups
+
+  safari/
+    skill.md
+    open-url.scpt         # Open URL in Safari
+    get-current-url.scpt  # Get URL of active tab
+    get-page-content.scpt # Extract page text content
+    run-javascript.scpt   # Execute JS in current page
+    list-tabs.scpt        # List all open tabs
+    close-tab.scpt        # Close specific tab
+
+  finder/
+    skill.md
+    move-files.scpt       # Move files between folders
+    copy-files.scpt       # Copy files
+    rename-file.scpt      # Rename file/folder
+    create-folder.scpt    # Create new folder
+    get-selection.scpt    # Get currently selected items
+    reveal-file.scpt      # Show file in Finder
+    folder-action.scpt    # Attach folder action scripts
+
+  clipboard/
+    skill.md
+    get-clipboard.scpt    # Read clipboard contents
+    set-clipboard.scpt    # Set clipboard contents
+    clipboard-history.sh  # Track recent clipboard items
+
+  spotlight/
+    skill.md
+    search-files.sh       # Search files via mdfind
+    search-content.sh     # Search file contents via mdfind
+    get-metadata.sh       # Get file metadata via mdls
+
+  screen-capture/
+    skill.md
+    screenshot.sh         # Capture screenshot (screencapture)
+    record-screen.sh      # Record screen video (screencapture -v)
+    record-window.sh      # Record specific window
+    record-region.sh      # Record screen region
+
+  music/
+    skill.md
+    play-pause.scpt       # Toggle playback
+    next-track.scpt       # Skip to next
+    search-library.scpt   # Search music library
+    get-now-playing.scpt  # Current track info
+    create-playlist.scpt  # Create new playlist
 ```
 
 ## iMessage Integration
@@ -190,6 +287,271 @@ Or a dedicated subfolder like `Brokkr-Shared/` for organization.
 - Large files take longer to sync
 - Notify Tommy via iMessage when important files are shared
 
+## Screen Recording & Video Creation (Remotion)
+
+Brokkr can create tutorial videos for brokkr.co using screen recording and Remotion.
+
+### Screen Recording Capabilities
+
+macOS 14.8.3 includes built-in screen recording via `screencapture`:
+
+```bash
+# Record entire screen (Ctrl+C to stop)
+screencapture -v output.mov
+
+# Record for specific duration (seconds)
+screencapture -V 30 output.mov
+
+# Record specific display (1=main, 2=secondary)
+screencapture -D 1 -v output.mov
+
+# Record with audio source
+screencapture -v -G <audio-id> output.mov
+
+# Record specific window by ID
+screencapture -v -l <windowid> output.mov
+
+# Record specific region
+screencapture -v -R x,y,width,height output.mov
+```
+
+### Remotion Integration
+
+Remotion creates videos programmatically using React. Combined with Claude Code, it enables AI-powered tutorial video generation.
+
+**Setup Required:**
+```bash
+# Install Remotion
+npx create-video@latest --blank
+
+# Or scaffold full project
+npx create-remotion-app
+```
+
+**Workflow for Tutorial Videos:**
+1. Screen record user flow in brokkr.co app
+2. Use Remotion to add: intro/outro, annotations, callouts, transitions
+3. Render final video programmatically
+4. Share via iCloud Family Sharing or direct upload
+
+**Use Cases:**
+- How to create a task in brokkr.co
+- How to view task progress
+- How to manage agent settings
+- Feature announcement videos
+- Onboarding walkthroughs
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/record` | Start screen recording |
+| `/record stop` | Stop recording |
+| `/record <url>` | Record while navigating URL |
+| `/video create <topic>` | Create tutorial video with Remotion |
+
+## Shortcuts Integration
+
+Run macOS Shortcuts app automations from Brokkr. Shortcuts can bridge to iOS automations and access services without AppleScript dictionaries.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/shortcut <name>` | Run shortcut by name |
+| `/shortcuts` | List available shortcuts |
+
+### Use Cases
+
+- Bridge to iOS automations (Focus modes sync across devices)
+- Access Location Services via "Get current location" action
+- Run complex multi-app workflows
+- Trigger HomeKit scenes
+
+### AppleScript Integration
+
+```applescript
+-- Run a shortcut by name
+tell application "Shortcuts Events"
+    run shortcut "My Shortcut Name"
+end tell
+
+-- Run with input
+tell application "Shortcuts Events"
+    run shortcut "Process Text" with input "Hello World"
+end tell
+```
+
+## Contacts Integration
+
+Access and manage macOS Contacts for person lookup and contact management.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/contact <name>` | Find contact by name |
+| `/contact add <name>` | Create new contact |
+
+### Use Cases
+
+- Look up email/phone before sending messages
+- Add new contacts from email signatures
+- Enrich task context with contact info
+- Birthday/anniversary reminders
+
+### AppleScript Examples
+
+```applescript
+-- Find contact by name
+tell application "Contacts"
+    set foundPeople to people whose name contains "John"
+    repeat with p in foundPeople
+        log name of p & ": " & value of first email of p
+    end repeat
+end tell
+
+-- Create new contact
+tell application "Contacts"
+    set newPerson to make new person with properties {first name:"Jane", last name:"Doe"}
+    make new email at end of emails of newPerson with properties {label:"work", value:"jane@example.com"}
+    save
+end tell
+```
+
+## Safari Integration
+
+Browser automation as backup to Chrome, bookmark management, and web scraping.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/safari <url>` | Open URL in Safari |
+| `/safari tabs` | List open tabs |
+| `/safari js <code>` | Run JavaScript in current page |
+
+### Use Cases
+
+- Web automation when Chrome unavailable
+- Reading list management
+- Bookmark organization
+- Quick URL opening from commands
+
+### AppleScript Examples
+
+```applescript
+-- Open URL and wait for load
+tell application "Safari"
+    activate
+    open location "https://brokkr.co"
+    delay 2
+    set pageContent to do JavaScript "document.body.innerText" in current tab of front window
+end tell
+
+-- Get all tab URLs
+tell application "Safari"
+    set tabList to {}
+    repeat with w in windows
+        repeat with t in tabs of w
+            set end of tabList to URL of t
+        end repeat
+    end repeat
+    return tabList
+end tell
+```
+
+## Finder & File Management
+
+Advanced file operations beyond basic shell commands.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/find <query>` | Search files via Spotlight |
+| `/organize <folder>` | Apply organization rules |
+| `/reveal <path>` | Show file in Finder |
+
+### Use Cases
+
+- Smart file organization
+- Folder action triggers (auto-process uploaded files)
+- Desktop cleanup automation
+- Recent files quick access
+
+### Spotlight Search (mdfind)
+
+```bash
+# Search file contents
+mdfind "meeting notes"
+
+# Search in specific folder
+mdfind -onlyin ~/Documents "invoice"
+
+# Search by file type
+mdfind "kMDItemKind == 'PDF'"
+
+# Search by date
+mdfind "kMDItemContentModificationDate > $time.today(-7)"
+```
+
+## Clipboard Management
+
+Cross-app data transfer and text processing.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/clipboard` | Show current clipboard |
+| `/clipboard set <text>` | Set clipboard contents |
+
+### AppleScript Examples
+
+```applescript
+-- Get clipboard
+set clipContent to the clipboard
+
+-- Set clipboard to text
+set the clipboard to "New content"
+
+-- Set clipboard to file reference
+set the clipboard to POSIX file "/path/to/file"
+```
+
+## Music Control
+
+Control Apple Music playback and manage library.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/music` | Now playing info |
+| `/music play` | Start playback |
+| `/music pause` | Pause playback |
+| `/music next` | Next track |
+| `/music search <query>` | Search library |
+
+### AppleScript Examples
+
+```applescript
+-- Get now playing
+tell application "Music"
+    if player state is playing then
+        set trackName to name of current track
+        set artistName to artist of current track
+        return trackName & " by " & artistName
+    end if
+end tell
+
+-- Play/pause toggle
+tell application "Music"
+    playpause
+end tell
+```
+
 ## Self-Improvement System
 
 ### Building New Capabilities
@@ -227,9 +589,11 @@ During idle time:
 
 ## Implementation Phases
 
-### Phase 0 - macOS System Setup (Required First)
+### Phase 0 - macOS System Setup ✅ COMPLETE
 
 Configure macOS for autonomous operation. These settings allow Brokkr to run 24/7 without user intervention.
+
+**Verified 2026-02-01:** All AppleScript permissions working. Power management handled by caffeinate.
 
 #### Power Management (Prevent Sleep)
 
@@ -262,13 +626,13 @@ sudo pmset -a hibernatemode 0
 - [ ] /opt/homebrew/opt/node@22/bin/node
 
 **Automation** (grant Terminal control over each app):
-- [ ] Terminal → System Events
-- [ ] Terminal → Messages
-- [ ] Terminal → Mail
-- [ ] Terminal → Calendar
-- [ ] Terminal → Reminders
-- [ ] Terminal → Notes
-- [ ] Terminal → Finder
+- [x] Terminal → System Events
+- [x] Terminal → Messages
+- [x] Terminal → Mail
+- [x] Terminal → Calendar
+- [x] Terminal → Reminders
+- [x] Terminal → Notes
+- [x] Terminal → Finder
 
 *Note: Automation permissions prompt automatically on first use. Approve when prompted.*
 
@@ -320,26 +684,45 @@ If any command fails with "not authorized", re-check the Automation permissions 
 5. Basic triage automation
 6. Email command parsing
 
-### Phase 3 - Apple Apps
+### Phase 3 - Apple Apps (Core)
 7. Calendar skill
 8. Reminders skill
 9. Notes skill
 10. iCloud Family Sharing skill
 
-### Phase 4 - System Notifications
-11. Notification trigger system
-12. Shared calendar/notes/reminders reactions
-13. Email notification handling
+### Phase 4 - Apple Apps (Extended)
+11. Contacts skill
+12. Safari skill
+13. Finder/Spotlight skill
+14. Clipboard skill
+15. Music skill
 
-### Phase 5 - Self-Improvement
-14. Urgency learning system
-15. Self-maintenance routines
-16. Pattern detection and shortcuts
+### Phase 5 - Screen Recording & Video
+16. Screen capture skill (screencapture)
+17. Screen recording skill (screencapture -v)
+18. Remotion integration for tutorial videos
+19. Video workflow automation
 
-### Phase 6 - Refinement
-17. Morning briefing automation
-18. Cross-skill workflows
-19. Adaptive optimization
+### Phase 6 - Shortcuts & Automation
+20. Shortcuts skill (run/list shortcuts)
+21. Shortcuts bridge for iOS integrations
+22. Location via Shortcuts
+23. Focus mode control via Shortcuts
+
+### Phase 7 - System Notifications
+24. Notification trigger system
+25. Shared calendar/notes/reminders reactions
+26. Email notification handling
+
+### Phase 8 - Self-Improvement
+27. Urgency learning system
+28. Self-maintenance routines
+29. Pattern detection and shortcuts
+
+### Phase 9 - Refinement
+30. Morning briefing automation
+31. Cross-skill workflows
+32. Adaptive optimization
 
 ## Research Required Before Implementation
 
@@ -373,6 +756,69 @@ If any command fails with "not authorized", re-check the Automation permissions 
 - [ ] Check iCloud sync status programmatically
 - [ ] Handle sync delays gracefully
 - [ ] File permissions in shared folders
+
+---
+
+## Research Completed (2026-02-01)
+
+### Shortcuts ✅
+- Full AppleScript dictionary via Shortcuts Events app
+- Can run shortcuts by name with input parameters
+- Shortcuts can bridge to iOS (Focus, Location sync across devices)
+- Can run shell scripts and AppleScript within Shortcuts
+
+### Contacts ✅
+- Full AppleScript dictionary in Contacts.app
+- Can create, find, modify contacts
+- Access to all fields: name, email, phone, address, notes
+- Contact groups supported
+
+### Safari ✅
+- Full AppleScript dictionary + UI scripting
+- Can open URLs, get page content, run JavaScript
+- Tab management supported
+- Good backup to Chrome for web automation
+
+### Finder ✅
+- Fully scriptable and recordable
+- File operations: move, copy, rename, create
+- Folder actions for auto-processing
+- Works with aliases and POSIX paths
+
+### Spotlight/mdfind ✅
+- Via shell command `mdfind` in AppleScript
+- Content search and metadata queries
+- Can search specific folders with `-onlyin`
+- Full metadata access via `mdls`
+
+### Clipboard ✅
+- Built-in AppleScript commands: `the clipboard`, `set the clipboard to`
+- Supports text, files, images
+- Image format conversion possible (TIFF, PNG, JPEG)
+- Can use `pbcopy`/`pbpaste` via shell
+
+### Screen Recording ✅
+- Built-in `screencapture -v` for video recording on macOS 14.8.3
+- Can record: full screen, specific display, window, or region
+- Audio capture supported with `-G` flag
+- No ffmpeg required (though can install via Homebrew for advanced editing)
+
+### Music ✅
+- Full AppleScript dictionary (renamed from iTunes)
+- Playback control, library search, playlist management
+- Note: Podcasts app has NO AppleScript dictionary (data in SQLite)
+
+### Focus Modes ⚠️ (Limited)
+- No direct AppleScript dictionary
+- Can READ status via JXA workaround
+- Setting requires UI scripting or Shortcuts bridge
+- Shortcuts on iPhone can trigger when Mac Focus changes
+
+### Location ⚠️ (Limited)
+- CoreLocationCLI broken in macOS Ventura+
+- Use Shortcuts "Get current location" action as bridge
+- Location Helper app available for AppleScript access
+- Full CoreLocation requires compiled Swift app
 
 ## Constraints
 
@@ -414,14 +860,16 @@ The BrokkrMVP dev team has posted a comprehensive webhook integration protocol t
    - Send heartbeat every 30 seconds to `POST https://api.brokkr.app/api/agent/heartbeat`
    - Include queue_depth, status, capabilities
 
-### Implementation Checklist (from Issue #1)
+### Implementation Checklist (from Issue #1) ✅ COMPLETE
 
-- [ ] HMAC signature verification on incoming webhooks
-- [ ] Handle `task.created`, `task.clarification`, `task.cancelled` events
-- [ ] Send callbacks with proper status (processing, needs_input, completed, failed)
-- [ ] Implement 30-second heartbeat
-- [ ] Track token usage in callbacks
-- [ ] Include session_code in callbacks
+- [x] HMAC signature verification on incoming webhooks
+- [x] Handle `task.created`, `task.clarification`, `task.cancelled` events
+- [x] Send callbacks with proper status (processing, needs_input, completed, failed)
+- [x] Implement 30-second heartbeat
+- [x] Track token usage in callbacks
+- [x] Include session_code in callbacks
+- [x] Support callback_url from webhook payload (2026-02-01)
+- [x] Session resume with `--resume` flag (2026-02-01)
 
 ### Review Steps Before Implementation
 
