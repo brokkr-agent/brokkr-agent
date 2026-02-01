@@ -1,0 +1,13 @@
+{
+  "agent_id": "REPLACE_WITH_AGENT_UUID",
+  "webhook_secret": "REPLACE_WITH_SHARED_SECRET",
+  "api_url": "https://api.brokkr.app",
+  "capabilities": [
+    "equipment_research",
+    "contact_research",
+    "content_generation",
+    "data_validation",
+    "material_research"
+  ],
+  "version": "2.0.0"
+}
