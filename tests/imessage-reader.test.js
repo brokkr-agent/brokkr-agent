@@ -1,6 +1,6 @@
 // tests/imessage-reader.test.js
 import { describe, it, expect } from '@jest/globals';
-import { macTimeToUnix, getDbPath, getRecentMessages } from '../lib/imessage-reader.js';
+import { macTimeToUnix, getDbPath, getRecentMessages, getGroupMessages, getGroupMembers } from '../lib/imessage-reader.js';
 import os from 'os';
 import path from 'path';
 
@@ -105,6 +105,51 @@ describe('iMessage Reader Module', () => {
     it('should return empty array for invalid limit (non-integer)', () => {
       const messages = getRecentMessages('+12069090025', 5.5);
       expect(messages).toEqual([]);
+    });
+  });
+
+  describe('getGroupMessages', () => {
+    it('should be exported from the module', () => {
+      expect(typeof getGroupMessages).toBe('function');
+    });
+
+    it('should return an array', () => {
+      // Using a fake chat GUID - will return empty array if not found
+      const messages = getGroupMessages('chat123456789', 10);
+      expect(Array.isArray(messages)).toBe(true);
+    });
+
+    it('should return empty array for invalid limit (negative)', () => {
+      const messages = getGroupMessages('chat123456789', -1);
+      expect(messages).toEqual([]);
+    });
+
+    it('should return empty array for invalid limit (too large)', () => {
+      const messages = getGroupMessages('chat123456789', 10000);
+      expect(messages).toEqual([]);
+    });
+
+    it('should return empty array for invalid limit (non-integer)', () => {
+      const messages = getGroupMessages('chat123456789', 5.5);
+      expect(messages).toEqual([]);
+    });
+
+    it('should respect the limit parameter', () => {
+      const limit = 5;
+      const messages = getGroupMessages('chat123456789', limit);
+      expect(messages.length).toBeLessThanOrEqual(limit);
+    });
+  });
+
+  describe('getGroupMembers', () => {
+    it('should be exported from the module', () => {
+      expect(typeof getGroupMembers).toBe('function');
+    });
+
+    it('should return an array', () => {
+      // Using a fake chat GUID - will return empty array if not found
+      const members = getGroupMembers('chat123456789');
+      expect(Array.isArray(members)).toBe(true);
     });
   });
 });
