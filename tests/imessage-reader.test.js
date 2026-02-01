@@ -1,5 +1,5 @@
 // tests/imessage-reader.test.js
-import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import { macTimeToUnix, getDbPath, getRecentMessages } from '../lib/imessage-reader.js';
 import os from 'os';
 import path from 'path';
@@ -90,6 +90,21 @@ describe('iMessage Reader Module', () => {
     it('should handle phone number without plus sign', async () => {
       const messages = await getRecentMessages('12069090025', 10);
       expect(Array.isArray(messages)).toBe(true);
+    });
+
+    it('should return empty array for invalid limit (negative)', () => {
+      const messages = getRecentMessages('+12069090025', -1);
+      expect(messages).toEqual([]);
+    });
+
+    it('should return empty array for invalid limit (too large)', () => {
+      const messages = getRecentMessages('+12069090025', 10000);
+      expect(messages).toEqual([]);
+    });
+
+    it('should return empty array for invalid limit (non-integer)', () => {
+      const messages = getRecentMessages('+12069090025', 5.5);
+      expect(messages).toEqual([]);
     });
   });
 });
