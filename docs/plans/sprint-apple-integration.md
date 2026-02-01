@@ -155,7 +155,45 @@ All plans updated with official documentation URLs from:
 - MacForensics tools
 - Remotion official docs
 
+## Standardization Architecture
+
+**REQUIRED:** All skills in this sprint MUST follow the patterns in [Apple Integration Architecture](../concepts/2026-02-01-apple-integration-architecture.md).
+
+### Key Standards
+
+| Pattern | Location | Purpose |
+|---------|----------|---------|
+| Skill Structure | `skills/<integration>/` | Self-contained with lib/, reference/, tests/ |
+| Commands | `.claude/commands/<integration>.md` | Manual + agent invocation |
+| Subagents | `.claude/agents/` | Notification processing, device research |
+| iCloud Storage | `~/...CloudDocs/Brokkr/` | Large files organized by date |
+| Hooks | `.claude/settings.json` | Session lifecycle automation |
+
+### Shared Libraries
+
+| Library | Purpose |
+|---------|---------|
+| `lib/icloud-storage.js` | Consistent iCloud paths for all integrations |
+| `lib/notification-context.js` | Pass notification data to agent |
+
+### Custom Subagents
+
+| Subagent | Purpose |
+|----------|---------|
+| `notification-processor` | Evaluate if notification warrants agent action |
+| `device-researcher` | Research newly connected devices (Bluetooth) |
+| `content-analyzer` | Analyze attachments and exports |
+
+### Claude Code Research (v2.1.29)
+
+Research completed on Claude Code documentation:
+- Skills support `context: fork`, `agent:`, `skills:`, `hooks:` in frontmatter
+- Commands and skills merged - skills recommended for bundled resources
+- Custom subagents support `tools`, `model`, `permissionMode`, `skills`
+- Hooks support `Notification` event with matchers and agent-type evaluation
+
 ## Related Documentation
 
+- [Apple Integration Architecture](../concepts/2026-02-01-apple-integration-architecture.md) - **REQUIRED READING**
 - [Self-Improvement System Concept](../concepts/2026-01-31-brokkr-self-improvement-system.md)
 - [BrokkrMVP Webhook Protocol](./2026-01-31-brokkr-mvp-webhook-protocol.md)
