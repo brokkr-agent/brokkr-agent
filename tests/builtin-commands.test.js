@@ -9,11 +9,11 @@ describe('registerBuiltinCommands', () => {
     registry = new CommandRegistry();
   });
 
-  test('registers all 11 built-in commands', () => {
+  test('registers all 12 built-in commands', () => {
     registerBuiltinCommands(registry);
 
     const commands = registry.list();
-    expect(commands.length).toBe(11);
+    expect(commands.length).toBe(12);
   });
 
   test('returns the registry for chaining', () => {
@@ -30,7 +30,7 @@ describe('registerBuiltinCommands', () => {
     const result = registerBuiltinCommands();
 
     expect(result).toBe(getDefaultRegistry());
-    expect(getDefaultRegistry().list().length).toBe(11);
+    expect(getDefaultRegistry().list().length).toBe(12);
   });
 
   describe('/claude command', () => {
@@ -355,6 +355,24 @@ describe('registerBuiltinCommands', () => {
 
       const cmd = registry.get('questions');
       expect(cmd.category).toBe('sessions');
+    });
+  });
+
+  describe('/digest command', () => {
+    test('is registered with correct handler', () => {
+      registerBuiltinCommands(registry);
+      const cmd = registry.get('digest');
+
+      expect(cmd).toBeDefined();
+      expect(cmd.handler.type).toBe('internal');
+      expect(cmd.handler.function).toBe('handleDigest');
+    });
+
+    test('has arguments hint for days', () => {
+      registerBuiltinCommands(registry);
+      const cmd = registry.get('digest');
+
+      expect(cmd.arguments.hint).toBe('[days]');
     });
   });
 
