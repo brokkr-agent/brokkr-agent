@@ -200,8 +200,10 @@ async function pollNotifications() {
   pollCount++;
 
   try {
-    // Calculate start time: use last processed time or 5 minutes ago for first run
-    const startTime = lastProcessedTime || (Date.now() / 1000 - 300);
+    // Always query last 5 minutes - rely on processedNotificationIds for de-duplication
+    // This avoids issues with out-of-order timestamps (e.g., shared reminders)
+    const lookbackSeconds = 300;
+    const startTime = Date.now() / 1000 - lookbackSeconds;
 
     const notifications = await getRecentNotifications(startTime, MAX_NOTIFICATIONS_PER_POLL);
 
@@ -233,7 +235,6 @@ async function pollNotifications() {
 
       // Mark as processed regardless of success/failure to avoid infinite loops
       processedNotificationIds.add(rawNotification.rec_id);
-      lastProcessedTime = Math.max(lastProcessedTime, rawNotification.delivered_date);
     }
   } catch (err) {
     console.error(`[Poll #${pollCount}] Error: ${err.message}`);

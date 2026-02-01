@@ -5,10 +5,10 @@
   "rules": [
     {
       "name": "tommy-imessage",
-      "description": "Messages from Tommy's phone",
+      "description": "Messages from Tommy",
       "app": "imessage",
       "condition": {
-        "anyContains": "+12069090025"
+        "pattern": "(tommyjohnson90@gmail\\.com|\\+?1?206[-.]?909[-.]?0025)"
       },
       "action": "invoke",
       "priority": 100,
