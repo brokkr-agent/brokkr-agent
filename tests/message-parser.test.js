@@ -188,4 +188,33 @@ describe('parseMessage', () => {
       expect(parseHelpCommand('help')).toBeNull();
     });
   });
+
+  describe('parseMessage - natural conversation', () => {
+    it('treats non-command messages as natural_message when treatAsNatural is true', () => {
+      const result = parseMessage('Hello, how are you?', { treatAsNatural: true });
+
+      expect(result.type).toBe('natural_message');
+      expect(result.message).toBe('Hello, how are you?');
+    });
+
+    it('still returns not_command when treatAsNatural is false', () => {
+      const result = parseMessage('Hello, how are you?', { treatAsNatural: false });
+
+      expect(result.type).toBe('not_command');
+    });
+
+    it('handles empty messages', () => {
+      const result = parseMessage('', { treatAsNatural: true });
+
+      expect(result.type).toBe('empty_message');
+    });
+
+    it('still parses commands normally even with treatAsNatural true', () => {
+      const result = parseMessage('/claude hello', { treatAsNatural: true });
+
+      expect(result.type).toBe('command');
+      expect(result.command).toBeDefined();
+      expect(result.commandName).toBe('claude');
+    });
+  });
 });
