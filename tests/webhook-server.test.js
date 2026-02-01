@@ -93,6 +93,15 @@ describe('Webhook Server', () => {
       expect(response.body.error).toBe('task is required');
     });
 
+    test('returns 400 if task is whitespace only', async () => {
+      const response = await request(app)
+        .post('/webhook')
+        .send({ task: '   ' })
+        .expect(400);
+
+      expect(response.body.error).toBe('task is required');
+    });
+
     test('creates webhook session with correct type', async () => {
       const response = await request(app)
         .post('/webhook')
