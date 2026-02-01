@@ -40,7 +40,7 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 | [Chrome Skill](./2026-02-01-chrome-skill-plan.md) | Not Started | None | 10 |
 | [Finder & System Skill](./2026-02-01-finder-system-skill-plan.md) | Not Started | None | 9 |
 | [Music Skill](./2026-02-01-music-skill-plan.md) | Not Started | None | 7 |
-| [Bluetooth Skill](./2026-02-01-bluetooth-skill-plan.md) | Concept Only | None | 11 |
+| [Bluetooth Skill](./2026-02-01-bluetooth-skill-plan.md) | Not Started | None | 11 |
 
 ### Phase 5: Content Creation
 
