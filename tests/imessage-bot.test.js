@@ -75,6 +75,11 @@ describe('imessage-bot', () => {
       expect(imessageBotModule).not.toBeNull();
       expect(imessageBotModule.POLLING_INTERVAL_MS).toBe(2000);
     });
+
+    it('exports isTommyMessage function', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(typeof imessageBotModule.isTommyMessage).toBe('function');
+    });
   });
 
   describe('acquireLock', () => {
@@ -650,6 +655,28 @@ describe('imessage-bot', () => {
 
       expect(filtered).toHaveLength(1);
       expect(filtered[0].id).toBe(2);
+    });
+  });
+
+  describe('isTommyMessage', () => {
+    it('returns true for Tommy phone number with + prefix', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(imessageBotModule.isTommyMessage('+12069090025')).toBe(true);
+    });
+
+    it('returns true for Tommy number without + prefix', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(imessageBotModule.isTommyMessage('12069090025')).toBe(true);
+    });
+
+    it('returns false for other phone numbers', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(imessageBotModule.isTommyMessage('+15551234567')).toBe(false);
+    });
+
+    it('returns false for similar but different numbers', () => {
+      expect(imessageBotModule).not.toBeNull();
+      expect(imessageBotModule.isTommyMessage('+12069090026')).toBe(false);
     });
   });
 });

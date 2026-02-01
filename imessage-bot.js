@@ -32,6 +32,17 @@ import { getBusyMessage, getStatusMessage } from './lib/busy-handler.js';
 // Configuration constants
 export const TOMMY_PHONE = '+12069090025';
 export const POLLING_INTERVAL_MS = 2000;
+
+/**
+ * Check if a phone number is Tommy's
+ * @param {string} phoneNumber - Phone number to check
+ * @returns {boolean} True if this is Tommy's number
+ */
+export function isTommyMessage(phoneNumber) {
+  const normalized = phoneNumber.replace(/^\+/, '');
+  const tommyNormalized = TOMMY_PHONE.replace(/^\+/, '');
+  return normalized === tommyNormalized;
+}
 const WORKSPACE = process.cwd();
 const DRY_RUN = process.argv.includes('--dry-run');
 const LOCK_FILE = join(WORKSPACE, 'imessage-bot.lock');
