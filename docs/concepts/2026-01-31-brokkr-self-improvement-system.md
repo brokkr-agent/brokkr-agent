@@ -93,6 +93,13 @@ skills/
     mark-unread.scpt      # Mark as unread
     flag.scpt             # Flag message
     list-folders.scpt     # List mailboxes/folders
+
+  icloud-sharing/
+    skill.md
+    share-file.sh         # Share file to Family Sharing folder
+    list-shared.sh        # List files in shared folder
+    get-shared.sh         # Retrieve shared file from Tommy
+    sync-status.sh        # Check iCloud sync status
 ```
 
 ## iMessage Integration
@@ -148,6 +155,40 @@ When Tommy responds with feedback ("Don't message me about that", "This should h
 - Handling HTML vs plain text emails
 - Attachment handling
 - Multiple mailbox/account support
+
+## iCloud Family Sharing Integration
+
+Brokkr and Tommy share an iCloud Family Sharing account. Brokkr can share documents, reports, and files with Tommy via the shared iCloud folder.
+
+### Shared Folder Location
+
+```
+~/Library/Mobile Documents/com~apple~CloudDocs/Family/
+```
+
+Or a dedicated subfolder like `Brokkr-Shared/` for organization.
+
+### Use Cases
+
+- Share generated reports (daily summaries, analytics)
+- Share downloaded files or documents
+- Share exported data or backups
+- Receive files from Tommy for processing
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/share <file>` | Copy file to shared iCloud folder |
+| `/shared` | List files in shared folder |
+| `/shared get <file>` | Retrieve file Tommy shared |
+
+### Sync Considerations
+
+- iCloud sync is not instant - may take seconds to minutes
+- Check sync status before confirming share complete
+- Large files take longer to sync
+- Notify Tommy via iMessage when important files are shared
 
 ## Self-Improvement System
 
@@ -283,21 +324,22 @@ If any command fails with "not authorized", re-check the Automation permissions 
 7. Calendar skill
 8. Reminders skill
 9. Notes skill
+10. iCloud Family Sharing skill
 
 ### Phase 4 - System Notifications
-10. Notification trigger system
-11. Shared calendar/notes/reminders reactions
-12. Email notification handling
+11. Notification trigger system
+12. Shared calendar/notes/reminders reactions
+13. Email notification handling
 
 ### Phase 5 - Self-Improvement
-13. Urgency learning system
-14. Self-maintenance routines
-15. Pattern detection and shortcuts
+14. Urgency learning system
+15. Self-maintenance routines
+16. Pattern detection and shortcuts
 
 ### Phase 6 - Refinement
-16. Morning briefing automation
-17. Cross-skill workflows
-18. Adaptive optimization
+17. Morning briefing automation
+18. Cross-skill workflows
+19. Adaptive optimization
 
 ## Research Required Before Implementation
 
@@ -326,6 +368,12 @@ If any command fails with "not authorized", re-check the Automation permissions 
 - [ ] Creating vs modifying items
 - [ ] Syncing considerations
 
+### iCloud Family Sharing
+- [ ] Locate Family Sharing folder path
+- [ ] Check iCloud sync status programmatically
+- [ ] Handle sync delays gracefully
+- [ ] File permissions in shared folders
+
 ## Constraints
 
 - **8GB RAM** - Serial execution, unload resources aggressively
@@ -341,3 +389,4 @@ If any command fails with "not authorized", re-check the Automation permissions 
 4. Calendar/notes/reminders accessible via commands
 5. System notifications trigger appropriate Brokkr responses
 6. Brokkr creates reusable skills that improve efficiency over time
+7. Files can be shared between Brokkr and Tommy via iCloud Family Sharing
