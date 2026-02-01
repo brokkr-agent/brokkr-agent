@@ -3573,7 +3573,13 @@ git commit -m "feat: add webhook server for external integrations"
 
 ---
 
-## Phase 5: Testing & Documentation
+## Phase 5: Testing & Documentation ✅ COMPLETE
+
+> **Completed:** 2026-01-31
+>
+> **Task 5.1:** Kept Jest (already working with 337 tests) instead of migrating to Vitest. Added `test:watch` script.
+>
+> **Task 5.2:** Updated CLAUDE.md with v2 architecture including Architecture section, WhatsApp Commands table, Webhook API section, and Files listing.
 
 ### Task 5.1: Setup Vitest
 
