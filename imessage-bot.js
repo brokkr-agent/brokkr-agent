@@ -235,10 +235,14 @@ function getSessionAge(createdAt) {
  * @param {string} options.text - Command text (e.g., "/claude hello")
  * @param {string} options.phoneNumber - Phone number to send response to
  * @param {Function} options.sendMessage - Function to send messages (for testing)
+ * @param {Object} options.contact - Optional contact object for permission checking
  * @returns {Promise<Object>} Result object with type and details
  */
 export async function processCommand(options) {
-  const { text, phoneNumber, sendMessage = (phone, msg) => safeSendMessage(phone, msg, { dryRun: DRY_RUN }) } = options;
+  const { text, phoneNumber, sendMessage = (phone, msg) => safeSendMessage(phone, msg, { dryRun: DRY_RUN }), contact = null } = options;
+
+  // Check if sender is Tommy - only Tommy gets session codes
+  const isTommy = isTommyMessage(phoneNumber);
 
   const parsed = parseMessage(text);
   console.log(`Parsed type: ${parsed.type}`);
@@ -254,10 +258,10 @@ export async function processCommand(options) {
       return { type: 'unknown' };
 
     case 'session_resume':
-      return await handleSessionResume(parsed, phoneNumber, sendMessage);
+      return await handleSessionResume(parsed, phoneNumber, sendMessage, isTommy);
 
     case 'command':
-      return await handleParsedCommand(parsed, phoneNumber, sendMessage);
+      return await handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy);
 
     default:
       console.log(`Unknown parsed type: ${parsed.type}`);
@@ -270,9 +274,10 @@ export async function processCommand(options) {
  * @param {Object} parsed - Parsed message with sessionCode and optional message
  * @param {string} phoneNumber - Phone number to respond to
  * @param {Function} sendMessage - Function to send messages
+ * @param {boolean} isTommy - Whether sender is Tommy (includes session codes if true)
  * @returns {Promise<Object>} Result object
  */
-async function handleSessionResume(parsed, phoneNumber, sendMessage) {
+async function handleSessionResume(parsed, phoneNumber, sendMessage, isTommy = true) {
   const { sessionCode, message } = parsed;
 
   // Look up the session
@@ -303,13 +308,26 @@ async function handleSessionResume(parsed, phoneNumber, sendMessage) {
     // Busy with different session
     const currentCode = getCurrentSessionCode();
     if (currentCode !== sessionCode) {
-      await sendMessage(phoneNumber, `${getBusyMessage(queuePos)}\nSession: /${sessionCode}`);
+      // Include session code only for Tommy
+      if (isTommy) {
+        await sendMessage(phoneNumber, `${getBusyMessage(queuePos)}\nSession: /${sessionCode}`);
+      } else {
+        await sendMessage(phoneNumber, getBusyMessage(queuePos));
+      }
     } else {
       // Same session - still queued
-      await sendMessage(phoneNumber, `Queued follow-up for session /${sessionCode}`);
+      if (isTommy) {
+        await sendMessage(phoneNumber, `Queued follow-up for session /${sessionCode}`);
+      } else {
+        await sendMessage(phoneNumber, 'Follow-up queued');
+      }
     }
   } else {
-    await sendMessage(phoneNumber, `Resuming session /${sessionCode}...`);
+    if (isTommy) {
+      await sendMessage(phoneNumber, `Resuming session /${sessionCode}...`);
+    } else {
+      await sendMessage(phoneNumber, 'Resuming your task...');
+    }
   }
 
   return { type: 'session_resume', sessionCode, message };
@@ -320,9 +338,10 @@ async function handleSessionResume(parsed, phoneNumber, sendMessage) {
  * @param {Object} parsed - Parsed command object
  * @param {string} phoneNumber - Phone number to respond to
  * @param {Function} sendMessage - Function to send messages
+ * @param {boolean} isTommy - Whether sender is Tommy (includes session codes if true)
  * @returns {Promise<Object>} Result object
  */
-async function handleParsedCommand(parsed, phoneNumber, sendMessage) {
+async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = true) {
   const { handler, commandName, argString } = parsed;
 
   // Handle internal commands immediately
@@ -385,10 +404,19 @@ async function handleParsedCommand(parsed, phoneNumber, sendMessage) {
     });
 
     // Respond based on processing state
+    // Include session code only for Tommy
     if (isProcessing()) {
-      await sendMessage(phoneNumber, `${getBusyMessage(queuePos)}\nSession: /${session.code}`);
+      if (isTommy) {
+        await sendMessage(phoneNumber, `${getBusyMessage(queuePos)}\nSession: /${session.code}`);
+      } else {
+        await sendMessage(phoneNumber, getBusyMessage(queuePos));
+      }
     } else {
-      await sendMessage(phoneNumber, `Starting... Session: /${session.code}`);
+      if (isTommy) {
+        await sendMessage(phoneNumber, `Starting... Session: /${session.code}`);
+      } else {
+        await sendMessage(phoneNumber, 'Starting your task...');
+      }
     }
 
     return { type: 'claude', sessionCode: session.code, task };

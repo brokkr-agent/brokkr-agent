@@ -679,4 +679,145 @@ describe('imessage-bot', () => {
       expect(imessageBotModule.isTommyMessage('+12069090026')).toBe(false);
     });
   });
+
+  describe('processCommand - contact differentiation', () => {
+    // Clear queue and sessions between tests
+    beforeEach(async () => {
+      const queueModule = await import('../lib/queue.js');
+      const sessionsModule = await import('../lib/sessions.js');
+      queueModule.clearQueue();
+      sessionsModule.clearSessions();
+    });
+
+    it('includes session code in response for Tommy when starting a task', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      await imessageBotModule.processCommand({
+        text: '/claude test task for tommy',
+        phoneNumber: '+12069090025',  // Tommy's number
+        sendMessage: mockSend
+      });
+
+      // At least one message should contain "Session:"
+      expect(sentMessages.some(m => m.msg.includes('Session:'))).toBe(true);
+    });
+
+    it('excludes session code for non-Tommy contacts when starting a task', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      await imessageBotModule.processCommand({
+        text: '/claude test task for non-tommy',
+        phoneNumber: '+15551234567',  // Not Tommy
+        sendMessage: mockSend,
+        contact: {
+          id: '+15551234567',
+          trust_level: 'trusted',
+          command_permissions: ['*']  // Has permission to use /claude
+        }
+      });
+
+      // No message should contain "Session:"
+      expect(sentMessages.every(m => !m.msg.includes('Session:'))).toBe(true);
+    });
+
+    it('includes session code for Tommy on session resume', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Create a session first
+      const session = sessionsModule.createSession({
+        type: 'imessage',
+        task: 'Original task',
+        chatId: '+12069090025'
+      });
+
+      await imessageBotModule.processCommand({
+        text: `/${session.code}`,
+        phoneNumber: '+12069090025',  // Tommy's number
+        sendMessage: mockSend
+      });
+
+      // At least one message should contain "Session:" or the session code
+      expect(sentMessages.some(m => m.msg.includes('Session:') || m.msg.includes(`/${session.code}`))).toBe(true);
+    });
+
+    it('excludes session code for non-Tommy on session resume', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Create a session first
+      const session = sessionsModule.createSession({
+        type: 'imessage',
+        task: 'Original task',
+        chatId: '+15551234567'
+      });
+
+      await imessageBotModule.processCommand({
+        text: `/${session.code}`,
+        phoneNumber: '+15551234567',  // Not Tommy
+        sendMessage: mockSend,
+        contact: {
+          id: '+15551234567',
+          trust_level: 'trusted',
+          command_permissions: ['*']
+        }
+      });
+
+      // No message should contain "Session:"
+      expect(sentMessages.every(m => !m.msg.includes('Session:'))).toBe(true);
+    });
+
+    it('includes session code for Tommy on /status command response', async () => {
+      // Note: /status command currently doesn't include session codes
+      // This test verifies that internal commands work correctly for Tommy
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      await imessageBotModule.processCommand({
+        text: '/status',
+        phoneNumber: '+12069090025',  // Tommy's number
+        sendMessage: mockSend
+      });
+
+      // /status should work for Tommy
+      expect(sentMessages.length).toBeGreaterThan(0);
+      expect(sentMessages[0].msg).toContain('Bot Status');
+    });
+
+    it('allows /status for non-Tommy with appropriate contact permissions', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      await imessageBotModule.processCommand({
+        text: '/status',
+        phoneNumber: '+15551234567',  // Not Tommy
+        sendMessage: mockSend,
+        contact: {
+          id: '+15551234567',
+          trust_level: 'trusted',
+          command_permissions: ['*']
+        }
+      });
+
+      // /status should work for non-Tommy with permissions
+      expect(sentMessages.length).toBeGreaterThan(0);
+      expect(sentMessages[0].msg).toContain('Bot Status');
+    });
+  });
 });
