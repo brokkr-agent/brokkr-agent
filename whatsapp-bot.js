@@ -10,7 +10,7 @@ import { join } from 'path';
 import { parseMessage, getHelpText } from './lib/message-parser.js';
 import { enqueue, PRIORITY, getQueueDepth } from './lib/queue.js';
 import { createSession, getSessionByCode, listSessions, expireSessions } from './lib/sessions.js';
-import { processNextJob, setSendMessageCallback, setDryRunMode, isProcessing, getCurrentSessionCode } from './lib/worker.js';
+import { processNextJob, setSendMessageCallback, setDryRunMode, isProcessing, getCurrentSessionCode, cancelJob } from './lib/worker.js';
 import { startupCleanup } from './lib/resources.js';
 import { getBusyMessage, getStatusMessage } from './lib/busy-handler.js';
 
@@ -367,11 +367,19 @@ async function handleCommand(text, chatId) {
 
 /**
  * Handle session resume command (/<xx> [message])
+ * Supports special flags:
+ *   -cancel : Cancel the job (remove from queue or stop if running)
  * @param {Object} parsed - Parsed message with sessionCode and optional message
  * @param {string} chatId - Chat ID to respond to
  */
 async function handleSessionResume(parsed, chatId) {
   const { sessionCode, message } = parsed;
+
+  // Check for -cancel flag
+  if (message && (message.trim() === '-cancel' || message.trim().startsWith('-cancel '))) {
+    await handleCancelJob(sessionCode, chatId);
+    return;
+  }
 
   // Look up the session
   const session = getSessionByCode(sessionCode);
@@ -408,6 +416,21 @@ async function handleSessionResume(parsed, chatId) {
     }
   } else {
     await safeSendMessage(chatId, `Resuming session /${sessionCode}...`);
+  }
+}
+
+/**
+ * Handle job cancellation request
+ * @param {string} sessionCode - The session code to cancel
+ * @param {string} chatId - Chat ID to respond to
+ */
+async function handleCancelJob(sessionCode, chatId) {
+  const result = cancelJob(sessionCode);
+
+  if (result.success) {
+    await safeSendMessage(chatId, `Cancelled /${sessionCode}: ${result.message}`);
+  } else {
+    await safeSendMessage(chatId, result.message);
   }
 }
 

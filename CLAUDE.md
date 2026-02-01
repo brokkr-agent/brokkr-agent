@@ -84,6 +84,7 @@ Use these credentials to log into any service that requires authentication (GitH
 | `/claude <task>` | New task |
 | `/<xx>` | Resume session |
 | `/<xx> <msg>` | Continue session |
+| `/<xx> -cancel` | Cancel pending/active job |
 | `/sessions` | List sessions |
 | `/status` | Bot status |
 | `/help` | Show commands |
@@ -93,6 +94,7 @@ Use these credentials to log into any service that requires authentication (GitH
 - `POST /webhook` - New task (returns 3-char session code)
 - `POST /webhook/<xxx>` - Continue session
 - `GET /webhook/<xxx>` - Session status
+- `DELETE /webhook/<xxx>` - Cancel pending/active job
 - `GET /health` - Health check
 
 ## Files
