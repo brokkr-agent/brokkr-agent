@@ -9,7 +9,7 @@ const TEST_JOBS_DIR = join(process.cwd(), 'test-webhook-jobs');
 process.env.JOBS_DIR = TEST_JOBS_DIR;
 
 // Import modules after setting env
-const { app } = await import('../lib/webhook-server.js');
+const { app, setDryRunMode, setDebugMode, isDryRunMode, isDebugMode } = await import('../lib/webhook-server.js');
 const { clearQueue, getQueueDepth, PRIORITY } = await import('../lib/queue.js');
 const { clearSessions, createSession, getSessionByCode } = await import('../lib/sessions.js');
 
@@ -257,6 +257,190 @@ describe('Webhook Server', () => {
         .expect(404);
 
       expect(response.body.error).toBe('Session not found or expired');
+    });
+  });
+
+  describe('Dry-run mode', () => {
+    beforeEach(() => {
+      // Enable dry-run mode for these tests
+      setDryRunMode(true);
+      clearQueue();
+      clearSessions();
+    });
+
+    afterEach(() => {
+      // Disable dry-run mode after tests
+      setDryRunMode(false);
+    });
+
+    test('POST /webhook returns mock session code in dry-run mode', async () => {
+      const response = await request(app)
+        .post('/webhook')
+        .send({ task: 'Test dry-run task' })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.sessionCode).toBe('dry');
+      expect(response.body.jobId).toBe('dry-run-job');
+      expect(response.body.dryRun).toBe(true);
+      expect(response.body.queuePosition).toBe(0);
+    });
+
+    test('POST /webhook does not create real session in dry-run mode', async () => {
+      await request(app)
+        .post('/webhook')
+        .send({ task: 'Test dry-run task' })
+        .expect(200);
+
+      // Verify no real session was created (getSessionByCode returns null for non-existent)
+      const session = getSessionByCode('dry');
+      expect(session).toBeNull();
+
+      // Verify queue is empty (no job was enqueued)
+      expect(getQueueDepth()).toBe(0);
+    });
+
+    test('POST /webhook/:sessionCode handles "dry" session', async () => {
+      const response = await request(app)
+        .post('/webhook/dry')
+        .send({ message: 'Follow up in dry-run' })
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.sessionCode).toBe('dry');
+      expect(response.body.jobId).toBe('dry-run-job');
+      expect(response.body.dryRun).toBe(true);
+    });
+
+    test('GET /webhook/dry returns mock session data', async () => {
+      const response = await request(app)
+        .get('/webhook/dry')
+        .expect(200);
+
+      expect(response.body.sessionCode).toBe('dry');
+      expect(response.body.type).toBe('webhook');
+      expect(response.body.task).toBe('dry-run test task');
+      expect(response.body.status).toBe('active');
+      expect(response.body.dryRun).toBe(true);
+    });
+
+    test('GET /health works normally in dry-run mode', async () => {
+      const response = await request(app)
+        .get('/health')
+        .expect(200);
+
+      expect(response.body.status).toBe('ok');
+      expect(response.body).toHaveProperty('processing');
+      expect(response.body).toHaveProperty('queueDepth');
+    });
+
+    test('dry-run mode still validates task input', async () => {
+      const response = await request(app)
+        .post('/webhook')
+        .send({})
+        .expect(400);
+
+      expect(response.body.error).toBe('task is required');
+    });
+
+    test('can still access real sessions in dry-run mode', async () => {
+      // Temporarily disable dry-run to create a real session
+      setDryRunMode(false);
+      const createResponse = await request(app)
+        .post('/webhook')
+        .send({ task: 'Real task' })
+        .expect(200);
+
+      const realSessionCode = createResponse.body.sessionCode;
+      expect(realSessionCode).not.toBe('dry');
+
+      // Re-enable dry-run mode
+      setDryRunMode(true);
+
+      // Should still be able to get the real session
+      const statusResponse = await request(app)
+        .get(`/webhook/${realSessionCode}`)
+        .expect(200);
+
+      expect(statusResponse.body.sessionCode).toBe(realSessionCode);
+      expect(statusResponse.body.dryRun).toBeUndefined();
+    });
+  });
+
+  describe('Debug mode', () => {
+    let originalConsoleLog;
+    let logOutput;
+
+    beforeEach(() => {
+      // Capture console.log output
+      logOutput = [];
+      originalConsoleLog = console.log;
+      console.log = (...args) => {
+        logOutput.push(args.join(' '));
+        originalConsoleLog(...args);
+      };
+      setDebugMode(true);
+      clearQueue();
+      clearSessions();
+    });
+
+    afterEach(() => {
+      console.log = originalConsoleLog;
+      setDebugMode(false);
+    });
+
+    test('logs incoming requests in debug mode', async () => {
+      await request(app)
+        .post('/webhook')
+        .send({ task: 'Debug test task' })
+        .expect(200);
+
+      const requestLog = logOutput.find(line => line.includes('[DEBUG] --> POST /webhook'));
+      expect(requestLog).toBeTruthy();
+      expect(requestLog).toContain('Debug test task');
+    });
+
+    test('logs outgoing responses in debug mode', async () => {
+      await request(app)
+        .post('/webhook')
+        .send({ task: 'Debug test task' })
+        .expect(200);
+
+      const responseLog = logOutput.find(line => line.includes('[DEBUG] <-- 200'));
+      expect(responseLog).toBeTruthy();
+      expect(responseLog).toContain('success');
+    });
+
+    test('logs GET requests in debug mode', async () => {
+      await request(app)
+        .get('/health')
+        .expect(200);
+
+      const requestLog = logOutput.find(line => line.includes('[DEBUG] --> GET /health'));
+      expect(requestLog).toBeTruthy();
+    });
+  });
+
+  describe('Mode state functions', () => {
+    afterEach(() => {
+      setDryRunMode(false);
+      setDebugMode(false);
+    });
+
+    test('isDryRunMode returns correct state', () => {
+      expect(isDryRunMode()).toBe(false);
+      setDryRunMode(true);
+      expect(isDryRunMode()).toBe(true);
+      setDryRunMode(false);
+      expect(isDryRunMode()).toBe(false);
+    });
+
+    test('isDebugMode returns correct state', () => {
+      expect(isDebugMode()).toBe(false);
+      setDebugMode(true);
+      expect(isDebugMode()).toBe(true);
+      setDebugMode(false);
+      expect(isDebugMode()).toBe(false);
     });
   });
 });
