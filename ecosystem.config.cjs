@@ -48,6 +48,21 @@ module.exports = {
       env: {
         NODE_ENV: 'production'
       }
+    },
+    {
+      name: 'imessage-bot',
+      script: 'imessage-bot.js',
+      cwd: '/Users/brokkrbot/brokkr-agent',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '200M',
+      error_file: '/tmp/imessage-bot.log',
+      out_file: '/tmp/imessage-bot.log',
+      merge_logs: true,
+      env: {
+        NODE_ENV: 'production'
+      }
     }
   ]
 };
