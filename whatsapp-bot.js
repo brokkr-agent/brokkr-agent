@@ -10,7 +10,7 @@ import { join } from 'path';
 import { parseMessage, getHelpText } from './lib/message-parser.js';
 import { enqueue, PRIORITY, getQueueDepth } from './lib/queue.js';
 import { createSession, getSessionByCode, listSessions, expireSessions } from './lib/sessions.js';
-import { processNextJob, setSendMessageCallback, isProcessing, getCurrentSessionCode } from './lib/worker.js';
+import { processNextJob, setSendMessageCallback, setDryRunMode, isProcessing, getCurrentSessionCode } from './lib/worker.js';
 import { startupCleanup } from './lib/resources.js';
 import { getBusyMessage, getStatusMessage } from './lib/busy-handler.js';
 
@@ -146,6 +146,11 @@ async function safeSendMessage(chatId, message, retries = 3) {
 // Register the send callback with the worker
 setSendMessageCallback(safeSendMessage);
 
+// Set dry-run mode in worker if enabled
+if (DRY_RUN) {
+  setDryRunMode(true);
+}
+
 // ============================================
 // Client Event Handlers
 // ============================================
@@ -173,6 +178,8 @@ client.on('auth_failure', msg => {
 
 let lastMessageId = null;
 let pollCount = 0;
+const processedMessageIds = new Set(); // Track processed messages to avoid duplicates
+const MAX_PROCESSED_IDS = 100; // Limit memory usage
 
 async function pollForMessages() {
   pollCount++;
@@ -209,28 +216,58 @@ async function pollForMessages() {
 
       if (DEBUG && messages.length > 0) {
         console.log(`[Poll #${pollCount}] Fetched ${messages.length} messages, lastMessageId: ${lastMessageId?.slice(-8) || 'none'}`);
+        // Show the 3 newest messages for debugging
+        if (pollCount <= 3 || pollCount % 30 === 0) {
+          const preview = messages.slice(0, 3).map(m => ({
+            id: m.id._serialized.slice(-8),
+            body: (m.body || '').slice(0, 30),
+            fromMe: m.fromMe,
+            timestamp: m.timestamp
+          }));
+          console.log(`[Poll #${pollCount}] Newest messages:`, JSON.stringify(preview));
+        }
+      }
+
+      // On first poll (no lastMessageId), record existing messages as "seen"
+      // This prevents processing old messages from before bot started
+      if (!lastMessageId && messages.length > 0) {
+        lastMessageId = messages[0].id._serialized;
+        // Mark all existing messages as processed so they won't be reprocessed later
+        for (const msg of messages) {
+          processedMessageIds.add(msg.id._serialized);
+        }
+        if (DEBUG) {
+          console.log(`[Poll #${pollCount}] First poll - marked ${messages.length} existing messages as seen`);
+        }
+        return;
       }
 
       // Process messages oldest-first to maintain order
       // messages[0] is newest, so reverse to process oldest first
       const orderedMessages = [...messages].reverse();
 
-      // Find where to start processing (after lastMessageId)
-      let foundLast = !lastMessageId; // If no lastMessageId, process all
-      const toProcess = [];
+      // Update lastMessageId immediately to prevent reprocessing on rapid polls
+      const newLastMessageId = messages[0].id._serialized;
 
+      // Find messages to process - only those we haven't seen before
+      const toProcess = [];
       for (const msg of orderedMessages) {
-        if (!foundLast) {
-          if (msg.id._serialized === lastMessageId) {
-            foundLast = true;
-          }
+        const msgId = msg.id._serialized;
+
+        // Skip if we've already processed this message
+        if (processedMessageIds.has(msgId)) {
           continue;
         }
 
         // Only process our own messages (self-chat)
-        if (!msg.fromMe) continue;
+        if (!msg.fromMe) {
+          continue;
+        }
 
         const text = (msg.body || '').trim();
+        if (DEBUG && text.startsWith('/')) {
+          console.log(`[Poll #${pollCount}] New command: "${text.slice(0, 50)}..."`);
+        }
 
         // Skip bot responses (they start with these patterns)
         if (text.startsWith('[DRY-RUN]') ||
@@ -255,19 +292,32 @@ async function pollForMessages() {
 
         // Only process messages starting with /
         if (text.startsWith('/')) {
-          toProcess.push({ msg, text });
+          toProcess.push({ msg, text, msgId });
         }
       }
 
       // Update lastMessageId to newest message
-      if (messages.length > 0) {
-        lastMessageId = messages[0].id._serialized;
-      }
+      lastMessageId = newLastMessageId;
 
-      // Process all new commands
-      for (const { msg, text } of toProcess) {
+      // Process all new commands and mark them as processed
+      for (const { msg, text, msgId } of toProcess) {
+        // Double-check we haven't processed this (race condition protection)
+        if (processedMessageIds.has(msgId)) {
+          continue;
+        }
+
+        // Mark as processed BEFORE handling to prevent duplicates
+        processedMessageIds.add(msgId);
+
         console.log(`\n[${new Date().toISOString()}] Received: "${text}"`);
         await handleCommand(text, myId);
+      }
+
+      // Clean up old processed IDs to prevent memory leak
+      if (processedMessageIds.size > MAX_PROCESSED_IDS) {
+        const idsArray = Array.from(processedMessageIds);
+        const toRemove = idsArray.slice(0, idsArray.length - MAX_PROCESSED_IDS);
+        toRemove.forEach(id => processedMessageIds.delete(id));
       }
 
       if (DEBUG && toProcess.length > 0) {

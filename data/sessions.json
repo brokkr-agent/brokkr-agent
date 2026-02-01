@@ -1,1 +1,41 @@
-{"sessions":[],"lastUpdated":null}
+{
+  "sessions": [
+    {
+      "code": "o1",
+      "type": "whatsapp",
+      "task": "Persist test",
+      "chatId": null,
+      "source": null,
+      "sessionId": "session-ml2ylnfn-bzve9o",
+      "claudeSessionId": null,
+      "createdAt": "2026-01-31T23:44:48.611Z",
+      "lastActivity": "2026-01-31T23:44:48.611Z",
+      "status": "active"
+    },
+    {
+      "code": "qy",
+      "type": "whatsapp",
+      "task": "test 1",
+      "chatId": "12069090025@c.us",
+      "source": null,
+      "sessionId": "session-ml2yms04-9afnkj",
+      "claudeSessionId": null,
+      "createdAt": "2026-01-31T23:45:41.188Z",
+      "lastActivity": "2026-01-31T23:45:42.267Z",
+      "status": "active"
+    },
+    {
+      "code": "1x",
+      "type": "whatsapp",
+      "task": "test two",
+      "chatId": "12069090025@c.us",
+      "source": null,
+      "sessionId": "session-ml2yn2t6-ustty6",
+      "claudeSessionId": null,
+      "createdAt": "2026-01-31T23:45:55.194Z",
+      "lastActivity": "2026-01-31T23:45:56.280Z",
+      "status": "active"
+    }
+  ],
+  "lastUpdated": "2026-01-31T23:45:56.280Z"
+}

@@ -1,4 +1,11 @@
-# Brokkr Agent Implementation Plan
+# Brokkr Agent Implementation Plan (V1 - ARCHIVED)
+
+> **⚠️ SUPERSEDED:** This plan has been replaced by the V2 implementation plan.
+> **New plan location:** `docs/plans/2026-01-31-brokkr-v2-enhanced-agent.md`
+>
+> This file is preserved for historical reference.
+
+---
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
