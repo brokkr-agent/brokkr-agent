@@ -341,7 +341,8 @@ async function handleSessionResume(parsed, phoneNumber, sendMessage, isTommy = t
     chatId: phoneNumber,
     source: 'imessage',
     sessionCode: session.code,
-    priority: PRIORITY.CRITICAL
+    priority: PRIORITY.CRITICAL,
+    phoneNumber: phoneNumber
   });
 
   // Respond based on current processing state
@@ -469,7 +470,8 @@ async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = t
       chatId: phoneNumber,
       source: 'imessage',
       sessionCode: session.code,
-      priority: PRIORITY.CRITICAL
+      priority: PRIORITY.CRITICAL,
+      phoneNumber: phoneNumber
     });
 
     // Respond based on processing state
