@@ -10,12 +10,50 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 
 ## Plans
 
-| Plan | Status | Priority | Dependencies | Est. Tasks |
-|------|--------|----------|--------------|------------|
-| [iMessage Skill](./2026-02-01-imessage-skill-plan.md) | Not Started | High | None | 10 |
-| [Email Skill](./2026-02-01-email-skill-plan.md) | Not Started | High | None | 15 |
-| [Screen Recording & Remotion](./2026-02-01-screen-recording-remotion-plan.md) | Not Started | Medium | None | 17 |
-| [Apple Notifications](./2026-02-01-apple-notification-integration-plan.md) | Not Started | Medium | None | 11 |
+### Phase 1: Communication Channels (Priority: High)
+
+| Plan | Status | Dependencies | Est. Tasks |
+|------|--------|--------------|------------|
+| [iMessage Skill](./2026-02-01-imessage-skill-plan.md) | Not Started | None | 10 |
+| [Email Skill](./2026-02-01-email-skill-plan.md) | Not Started | None | 15 |
+
+### Phase 2: Apple Notifications (Priority: High - Foundation for Others)
+
+| Plan | Status | Dependencies | Est. Tasks |
+|------|--------|--------------|------------|
+| [Apple Notifications](./2026-02-01-apple-notification-integration-plan.md) | Not Started | None | 11 |
+
+### Phase 3: Core Apple Apps
+
+| Plan | Status | Dependencies | Est. Tasks |
+|------|--------|--------------|------------|
+| [Calendar Skill](./2026-02-01-calendar-skill-plan.md) | Not Started | Notifications | 12 |
+| [Reminders Skill](./2026-02-01-reminders-skill-plan.md) | Not Started | Notifications | 11 |
+| [Notes Skill](./2026-02-01-notes-skill-plan.md) | Not Started | Notifications | 13 |
+| [iCloud Sharing Skill](./2026-02-01-icloud-sharing-skill-plan.md) | Not Started | None | 9 |
+
+### Phase 4: Extended Apps
+
+| Plan | Status | Dependencies | Est. Tasks |
+|------|--------|--------------|------------|
+| [Contacts Skill](./2026-02-01-contacts-skill-plan.md) | Not Started | None | 14 |
+| [Chrome Skill](./2026-02-01-chrome-skill-plan.md) | Not Started | None | 10 |
+| [Finder & System Skill](./2026-02-01-finder-system-skill-plan.md) | Not Started | None | 9 |
+| [Music Skill](./2026-02-01-music-skill-plan.md) | Not Started | None | 7 |
+
+### Phase 5: Content Creation
+
+| Plan | Status | Dependencies | Est. Tasks |
+|------|--------|--------------|------------|
+| [Screen Recording & Remotion](./2026-02-01-screen-recording-remotion-plan.md) | Not Started | None | 17 |
+
+### Phase 6: Automation Bridge
+
+| Plan | Status | Dependencies | Est. Tasks |
+|------|--------|--------------|------------|
+| [Shortcuts & Automation](./2026-02-01-shortcuts-automation-skill-plan.md) | Not Started | None | 10 |
+
+**Total: 13 plans, ~138 tasks**
 
 ## Architecture Principles
 
