@@ -29,6 +29,7 @@ import { processNextJob, setSendMessageCallback, setDryRunMode, isProcessing, ge
 import { startupCleanup } from './lib/resources.js';
 import { getBusyMessage, getStatusMessage } from './lib/busy-handler.js';
 import { shouldConsultTommy, sendConsultation } from './lib/imessage-consultation.js';
+import { getPendingByCode, resolvePending } from './lib/imessage-pending.js';
 
 // Configuration constants
 export const TOMMY_PHONE = '+12069090025';
@@ -295,6 +296,28 @@ export async function processCommand(options) {
  */
 async function handleSessionResume(parsed, phoneNumber, sendMessage, isTommy = true) {
   const { sessionCode, message } = parsed;
+
+  // Check for allow/deny commands BEFORE normal session resume
+  const normalizedMessage = (message || '').trim().toLowerCase();
+  if (normalizedMessage === 'allow' || normalizedMessage === 'deny') {
+    // Check if there's a pending question for this session code
+    const pending = getPendingByCode(sessionCode);
+    if (pending && pending.status === 'pending') {
+      // Resolve the pending question
+      const action = normalizedMessage;
+      resolvePending(sessionCode, action);
+
+      // Send confirmation to Tommy
+      if (action === 'allow') {
+        await sendMessage(phoneNumber, `Request approved for /${sessionCode}`);
+      } else {
+        await sendMessage(phoneNumber, `Request denied for /${sessionCode}`);
+      }
+
+      return { type: 'consultation_resolved', sessionCode, action };
+    }
+    // If no pending question or already resolved, fall through to normal session resume
+  }
 
   // Look up the session
   const session = getSessionByCode(sessionCode);

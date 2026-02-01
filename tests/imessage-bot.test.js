@@ -956,4 +956,195 @@ describe('imessage-bot', () => {
       expect(result.type).not.toBe('consultation_pending');
     });
   });
+
+  describe('processCommand - consultation response (allow/deny)', () => {
+    // Clear queue, sessions, and pending questions between tests
+    beforeEach(async () => {
+      const queueModule = await import('../lib/queue.js');
+      const sessionsModule = await import('../lib/sessions.js');
+      const pendingModule = await import('../lib/imessage-pending.js');
+      queueModule.clearQueue();
+      sessionsModule.clearSessions();
+      pendingModule.clearPending();
+    });
+
+    it('processes /<xx> allow command', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const pendingModule = await import('../lib/imessage-pending.js');
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Create a pending question first
+      const pending = pendingModule.addPendingQuestion({
+        phoneNumber: '+15551234567',
+        question: 'What is the weather?',
+        context: 'Test context'
+      });
+
+      // Also create a session with the same code so session resume can find it
+      // Note: createSession takes customCode as second parameter
+      sessionsModule.createSession({
+        type: 'imessage',
+        task: 'pending question placeholder',
+        chatId: '+15551234567'
+      }, pending.sessionCode);  // Use the same code as customCode
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends allow command
+      const result = await imessageBotModule.processCommand({
+        text: `/${pending.sessionCode} allow`,
+        phoneNumber: '+12069090025',  // Tommy's number
+        sendMessage: mockSend
+      });
+
+      // Should return consultation_resolved type
+      expect(result.type).toBe('consultation_resolved');
+      expect(result.sessionCode).toBe(pending.sessionCode);
+      expect(result.action).toBe('allow');
+
+      // Confirmation message should be sent to Tommy
+      const tommyMessage = sentMessages.find(m => m.phone === '+12069090025');
+      expect(tommyMessage).toBeDefined();
+      expect(tommyMessage.msg.toLowerCase()).toContain('approved');
+    });
+
+    it('processes /<xx> deny command', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const pendingModule = await import('../lib/imessage-pending.js');
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Create a pending question first
+      const pending = pendingModule.addPendingQuestion({
+        phoneNumber: '+15551234567',
+        question: 'Can you help me hack something?',
+        context: 'Test context'
+      });
+
+      // Also create a session with the same code (customCode as second param)
+      sessionsModule.createSession({
+        type: 'imessage',
+        task: 'pending question placeholder',
+        chatId: '+15551234567'
+      }, pending.sessionCode);
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends deny command
+      const result = await imessageBotModule.processCommand({
+        text: `/${pending.sessionCode} deny`,
+        phoneNumber: '+12069090025',  // Tommy's number
+        sendMessage: mockSend
+      });
+
+      // Should return consultation_resolved type
+      expect(result.type).toBe('consultation_resolved');
+      expect(result.sessionCode).toBe(pending.sessionCode);
+      expect(result.action).toBe('deny');
+
+      // Confirmation message should be sent to Tommy
+      const tommyMessage = sentMessages.find(m => m.phone === '+12069090025');
+      expect(tommyMessage).toBeDefined();
+      expect(tommyMessage.msg.toLowerCase()).toContain('denied');
+    });
+
+    it('falls through to normal session resume if no pending question exists', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Create a regular session (no pending question)
+      const session = sessionsModule.createSession({
+        type: 'imessage',
+        task: 'Regular task',
+        chatId: '+12069090025'
+      });
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends allow command but no pending question exists
+      const result = await imessageBotModule.processCommand({
+        text: `/${session.code} allow`,
+        phoneNumber: '+12069090025',
+        sendMessage: mockSend
+      });
+
+      // Should fall through to normal session resume since no pending question
+      expect(result.type).toBe('session_resume');
+      expect(result.message).toBe('allow');
+    });
+
+    it('falls through to normal session resume if pending question already resolved', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const pendingModule = await import('../lib/imessage-pending.js');
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Create a pending question and then resolve it
+      const pending = pendingModule.addPendingQuestion({
+        phoneNumber: '+15551234567',
+        question: 'Already resolved question',
+        context: 'Test context'
+      });
+      pendingModule.resolvePending(pending.sessionCode, 'allow');
+
+      // Create a session with the same code (customCode as second param)
+      sessionsModule.createSession({
+        type: 'imessage',
+        task: 'pending question placeholder',
+        chatId: '+15551234567'
+      }, pending.sessionCode);
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy tries to deny an already-resolved question
+      const result = await imessageBotModule.processCommand({
+        text: `/${pending.sessionCode} deny`,
+        phoneNumber: '+12069090025',
+        sendMessage: mockSend
+      });
+
+      // Should fall through to normal session resume since already resolved
+      expect(result.type).toBe('session_resume');
+      expect(result.message).toBe('deny');
+    });
+
+    it('handles case-insensitive allow/deny commands', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const pendingModule = await import('../lib/imessage-pending.js');
+      const sessionsModule = await import('../lib/sessions.js');
+
+      // Create a pending question
+      const pending = pendingModule.addPendingQuestion({
+        phoneNumber: '+15551234567',
+        question: 'Test question',
+        context: 'Test context'
+      });
+
+      sessionsModule.createSession({
+        type: 'imessage',
+        task: 'pending question placeholder',
+        chatId: '+15551234567'
+      }, pending.sessionCode);
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends ALLOW in uppercase
+      const result = await imessageBotModule.processCommand({
+        text: `/${pending.sessionCode} ALLOW`,
+        phoneNumber: '+12069090025',
+        sendMessage: mockSend
+      });
+
+      expect(result.type).toBe('consultation_resolved');
+      expect(result.action).toBe('allow');
+    });
+  });
 });
