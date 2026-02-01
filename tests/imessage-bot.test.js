@@ -1267,4 +1267,76 @@ describe('imessage-bot', () => {
       expect(response).toContain('John Doe');
     });
   });
+
+  describe('processCommand - /digest command', () => {
+    it('shows placeholder message for now', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends /digest command
+      const result = await imessageBotModule.processCommand({
+        text: '/digest',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSend
+      });
+
+      // Should return digest type
+      expect(result.type).toBe('digest');
+
+      // Message should be sent with placeholder text
+      expect(sentMessages.length).toBe(1);
+      const response = sentMessages[0].msg;
+
+      // Should contain "Digest" in the response
+      expect(response).toContain('Digest');
+      // Default days should be 7
+      expect(response).toContain('7 days');
+      // Should mention it's coming soon
+      expect(response).toContain('coming soon');
+      // Should suggest /questions as alternative
+      expect(response).toContain('/questions');
+    });
+
+    it('parses custom days argument', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends /digest 30
+      const result = await imessageBotModule.processCommand({
+        text: '/digest 30',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSend
+      });
+
+      expect(result.type).toBe('digest');
+
+      const response = sentMessages[0].msg;
+      // Should use custom days value
+      expect(response).toContain('30 days');
+    });
+
+    it('defaults to 7 days for invalid argument', async () => {
+      expect(imessageBotModule).not.toBeNull();
+
+      const sentMessages = [];
+      const mockSend = async (phone, msg) => sentMessages.push({ phone, msg });
+
+      // Tommy sends /digest with non-numeric arg
+      const result = await imessageBotModule.processCommand({
+        text: '/digest abc',
+        phoneNumber: '+12069090025',
+        sendMessage: mockSend
+      });
+
+      expect(result.type).toBe('digest');
+
+      const response = sentMessages[0].msg;
+      // Should fallback to 7 days
+      expect(response).toContain('7 days');
+    });
+  });
 });

@@ -432,6 +432,11 @@ async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = t
         await sendMessage(phoneNumber, response);
       }
       return { type: 'questions' };
+    } else if (handler.function === 'handleDigest') {
+      // Parse days from argString, default to 7
+      const days = parseInt(argString) || 7;
+      await sendMessage(phoneNumber, `Digest (last ${days} days): Feature coming soon.\n\nFor now, use /questions to see pending requests.`);
+      return { type: 'digest' };
     }
     return { type: 'internal', handler: handler.function };
   }
