@@ -97,6 +97,26 @@ Use these credentials to log into any service that requires authentication (GitH
 - `DELETE /webhook/<xxx>` - Cancel pending/active job
 - `GET /health` - Health check
 
+## BrokkrMVP Integration
+
+The webhook server implements the BrokkrMVP protocol for authenticated task processing.
+
+**Protocol Features:**
+- HMAC-SHA256 signed requests (X-Agent-Id, X-Timestamp, X-Signature headers)
+- Fat payload webhooks with full task context
+- Automatic callbacks to BrokkrMVP on task completion
+- 30-second heartbeat with queue status
+
+**Configuration:** `skills/brokkr-mvp/config.json`
+
+**Validation:**
+```bash
+node skills/brokkr-mvp/validation/test-hmac.js
+node skills/brokkr-mvp/validation/test-callback.js
+```
+
+**See:** `skills/brokkr-mvp/skill.md` for full protocol documentation.
+
 ## Files
 
 - `whatsapp-bot.js` - Main entry point
