@@ -9,11 +9,11 @@ describe('registerBuiltinCommands', () => {
     registry = new CommandRegistry();
   });
 
-  test('registers all 10 built-in commands', () => {
+  test('registers all 11 built-in commands', () => {
     registerBuiltinCommands(registry);
 
     const commands = registry.list();
-    expect(commands.length).toBe(10);
+    expect(commands.length).toBe(11);
   });
 
   test('returns the registry for chaining', () => {
@@ -30,7 +30,7 @@ describe('registerBuiltinCommands', () => {
     const result = registerBuiltinCommands();
 
     expect(result).toBe(getDefaultRegistry());
-    expect(getDefaultRegistry().list().length).toBe(10);
+    expect(getDefaultRegistry().list().length).toBe(11);
   });
 
   describe('/claude command', () => {
@@ -330,6 +330,31 @@ describe('registerBuiltinCommands', () => {
 
       const cmd = registry.get('youtube');
       expect(cmd.description).toBe('YouTube search and transcripts');
+    });
+  });
+
+  describe('/questions command', () => {
+    test('is registered with correct handler', () => {
+      registerBuiltinCommands(registry);
+
+      const cmd = registry.get('questions');
+      expect(cmd).toBeDefined();
+      expect(cmd.handler.type).toBe('internal');
+      expect(cmd.handler.function).toBe('handleQuestions');
+    });
+
+    test('has correct description', () => {
+      registerBuiltinCommands(registry);
+
+      const cmd = registry.get('questions');
+      expect(cmd.description).toBe('View pending approval requests from contacts');
+    });
+
+    test('has category set to sessions', () => {
+      registerBuiltinCommands(registry);
+
+      const cmd = registry.get('questions');
+      expect(cmd.category).toBe('sessions');
     });
   });
 
