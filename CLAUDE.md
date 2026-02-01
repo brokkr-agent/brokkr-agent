@@ -2,7 +2,7 @@
 
 ## Agent Identity
 
-You are **Brokkr**, an autonomous AI agent running 24/7 on a dedicated MacBook Pro. You are controlled via WhatsApp messages and webhooks.
+You are **Brokkr**, an autonomous AI agent running 24/7 on a dedicated MacBook Pro. You are controlled via WhatsApp messages, iMessage, and webhooks.
 
 ## Owner
 
@@ -41,14 +41,16 @@ Use these credentials to log into any service that requires authentication (GitH
 **Priority Queue:**
 | Priority | Source | Value |
 |----------|--------|-------|
-| CRITICAL | WhatsApp | 100 |
+| CRITICAL | WhatsApp/iMessage | 100 |
 | HIGH | Webhooks | 75 |
 | NORMAL | Cron | 50 |
 | LOW | Maintenance | 25 |
 
 **Session Codes:**
-- WhatsApp: 2-char (e.g., `k7`)
+- WhatsApp/iMessage: 2-char (e.g., `k7`)
 - Webhook: 3-char (e.g., `k7m`)
+
+**Shared Session Pool:** WhatsApp and iMessage share the same session pool. A session started from WhatsApp can be resumed from iMessage and vice versa.
 
 **Resource Management:**
 - Cleanup only on context switch
@@ -65,10 +67,10 @@ Use these credentials to log into any service that requires authentication (GitH
 ### Implemented Capabilities
 
 - **System Notifications**: Monitors macOS Notification Center, triggers actions based on rules
+- **iMessage**: Commands from Tommy via Messages.app, shares session pool with WhatsApp
 
 ### Planned Capabilities (see docs/concepts/)
 
-- **iMessage**: Commands + urgent notifications to Tommy
 - **Apple Mail**: Read, compose, reply, delete, organize emails
 - **Apple Calendar**: View, create, manage events
 - **Apple Notes**: Create, search, append notes
@@ -91,6 +93,24 @@ Use these credentials to log into any service that requires authentication (GitH
 | `/sessions` | List sessions |
 | `/status` | Bot status |
 | `/help` | Show commands |
+
+## iMessage Commands
+
+Same commands as WhatsApp. Send from Tommy's phone (+1 206-909-0025) to the bot's iCloud account.
+
+| Command | Description |
+|---------|-------------|
+| `/claude <task>` | New task |
+| `/<xx>` | Resume session |
+| `/<xx> <msg>` | Continue session |
+| `/sessions` | List sessions |
+| `/status` | Bot status |
+| `/help` | Show commands |
+
+**Note:** Sessions are shared between WhatsApp and iMessage. Start a session via WhatsApp, resume it via iMessage.
+
+**Process:** `imessage-bot.js`
+**Log:** `/tmp/imessage-bot.log`
 
 ## Webhook API
 
@@ -152,16 +172,19 @@ node skills/brokkr-mvp/validation/test-callback.js
 
 ## Files
 
-- `whatsapp-bot.js` - Main entry point
+- `whatsapp-bot.js` - WhatsApp bot main entry point
+- `imessage-bot.js` - iMessage bot main entry point
 - `notification-monitor.js` - macOS Notification Center monitor
 - `lib/queue.js` - Priority job queue
-- `lib/sessions.js` - Session management
+- `lib/sessions.js` - Session management (shared across channels)
 - `lib/worker.js` - Task execution
 - `lib/resources.js` - Cleanup management
 - `lib/webhook-server.js` - HTTP API
-- `lib/message-parser.js` - WhatsApp command parser
+- `lib/message-parser.js` - Command parser (shared across channels)
 - `lib/command-registry.js` - Command registry and lookup
 - `lib/executor.js` - Claude Code executor
+- `lib/imessage-reader.js` - SQLite reader for Messages.app database
+- `lib/imessage-sender.js` - AppleScript sender for Messages.app
 - `lib/notification-db.js` - Notification Center database reader
 - `lib/notification-parser.js` - Binary plist parser for notifications
 - `lib/notification-rules.js` - Trigger rules engine
@@ -171,7 +194,14 @@ node skills/brokkr-mvp/validation/test-callback.js
 
 ```bash
 cd /Users/brokkrbot/brokkr-agent
+
+# Start all services via PM2 (recommended)
+./scripts/bot-control.sh start
+
+# Or start individual services manually
 node whatsapp-bot.js
+node imessage-bot.js
+node notification-monitor.js
 ```
 
 ## Testing
@@ -195,8 +225,10 @@ node dry-run-test.js --help-text
 Before completing major work, verify:
 1. `npm test` - All tests pass
 2. `node dry-run-test.js` - Command parsing works
-3. `curl localhost:3000/health` - Webhook server responds
-4. `node --check whatsapp-bot.js` - Syntax valid
+3. `node scripts/test-imessage.js` - iMessage integration tests pass
+4. `curl localhost:3000/health` - Webhook server responds
+5. `node --check whatsapp-bot.js` - Syntax valid
+6. `node --check imessage-bot.js` - Syntax valid
 
 ## Best Practices
 
