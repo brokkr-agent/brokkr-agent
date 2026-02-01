@@ -11,6 +11,10 @@
 
 **Architecture:** This IS the bridge to Apple Shortcuts app for the Apple Integration suite. Provides access to macOS Shortcuts via AppleScript (Shortcuts Events) and CLI. Other skills use this to access iOS-only capabilities, Focus Modes, Location Services, and HomeKit. Follows the standardized Apple Integration skill structure.
 
+> **⏸️ DEFERRED - Focus Modes:** Before implementing Focus Mode functionality (Task 3),
+> brainstorm with Tommy to confirm use cases and benefits. Currently unclear what
+> value Focus Mode reading/setting provides for the agent. See sprint index for status.
+
 **Tech Stack:** Node.js, osascript (Shortcuts Events AppleScript), `/usr/bin/shortcuts` CLI, JXA (for Focus Mode reading), lib/icloud-storage.js for storing outputs
 
 ---

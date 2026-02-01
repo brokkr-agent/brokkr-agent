@@ -2393,3 +2393,168 @@ Research documentation and code examples referenced during planning:
 - [Mac Automation Scripting Guide](https://developer.apple.com/library/archive/documentation/LanguagesUtilities/Conceptual/MacAutomationScriptingGuide/AppendixA-AppleScriptObjCQuickTranslationGuide.html)
 - [How Do I Export vCards from Apple Contacts using AppleScript?](https://forum.keyboardmaestro.com/t/how-do-i-export-vcards-from-apple-contacts-using-applescript/15951)
 - [AppleScript and Apple Contacts - Apple Developer Forums](https://developer.apple.com/forums/thread/681605)
+
+---
+
+## Additional Research (2026-02-01)
+
+Research conducted for iMessage Advanced Assistant integration. These findings expand the contacts plan with additional automation capabilities.
+
+### JXA (JavaScript for Automation) Alternative
+
+JXA provides the same capabilities as AppleScript with JavaScript syntax:
+
+```javascript
+// Run via: osascript -l JavaScript script.js
+
+(() => {
+    const app = Application("Contacts");
+
+    // Get all contacts efficiently (batch retrieval)
+    const names = app.people.name();
+    const phones = app.people.phones();
+    const emails = app.people.emails();
+
+    // Search contacts
+    const smiths = app.people.whose({name: {_contains: "Smith"}});
+
+    // Create new contact
+    const person = app.Person({
+        firstName: "John",
+        lastName: "Doe",
+        organization: "Acme Inc"
+    });
+    app.people.push(person);
+
+    // Add email to contact
+    const email = app.Email({label: "work", value: "john@acme.com"});
+    person.emails.push(email);
+
+    app.save();
+
+    return JSON.stringify({names, phones}, null, 2);
+})()
+```
+
+**Benefits:**
+- Native JavaScript syntax
+- Better for complex data processing
+- Easier integration with Node.js
+- JSON output for parsing
+
+### Shortcuts Integration
+
+Contacts has native Shortcuts actions:
+
+| Action | Description |
+|--------|-------------|
+| **Find Contacts** | Search with filters (name, company, etc.) |
+| **Get Details of Contacts** | Extract specific properties |
+| **Add New Contact** | Create contact (requires first/last name) |
+| **Edit Contact** | Modify existing properties |
+| **Select Contact** | Present contact picker UI |
+| **Phone** | Initiate phone call |
+| **Send Message** | Send SMS/iMessage |
+| **Send Email** | Compose email to contact |
+
+**Triggering Shortcuts from Node.js:**
+```javascript
+const { exec } = require('child_process');
+
+// Run shortcut with input
+exec('shortcuts run "Find Contact" -i "John Smith"', (err, stdout) => {
+  console.log(stdout);
+});
+
+// Get shortcut output
+exec('shortcuts run "Export Contact VCard" | pbcopy');
+```
+
+### Permission Requirements
+
+| Permission | Location | Required For |
+|------------|----------|--------------|
+| Automation | System Settings > Privacy & Security > Automation | AppleScript/JXA control |
+| Contacts | System Settings > Privacy & Security > Contacts | App-level access (Shortcuts) |
+
+**Error -1743:** "Not authorized to send Apple events to Contacts"
+- Solution: Grant permission in System Settings > Automation
+
+### Phone Number Lookup for iMessage Integration
+
+When iMessage receives a message from a phone number, lookup contact name:
+
+```javascript
+// lib/contacts-lookup.js
+const { execSync } = require('child_process');
+
+function lookupContactByPhone(phoneNumber) {
+  // Normalize phone (remove formatting)
+  const normalized = phoneNumber.replace(/\D/g, '');
+
+  try {
+    const script = `
+      tell application "Contacts"
+        set foundPeople to {}
+        repeat with p in every person
+          repeat with ph in phones of p
+            set phoneDigits to my normalizePhone(value of ph)
+            if phoneDigits contains "${normalized}" then
+              return name of p
+            end if
+          end repeat
+        end repeat
+        return ""
+      end tell
+
+      on normalizePhone(phoneText)
+        set digits to ""
+        repeat with c in phoneText
+          if "0123456789" contains c then
+            set digits to digits & c
+          end if
+        end repeat
+        return digits
+      end normalizePhone
+    `;
+
+    const result = execSync(`osascript -e '${script}'`).toString().trim();
+    return result || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+module.exports = { lookupContactByPhone };
+```
+
+### Integration with iMessage Advanced Assistant
+
+The contacts skill will provide:
+
+1. **Name resolution** - Convert phone numbers to display names for Brokkr's contact metadata
+2. **Relationship lookup** - Check if contact has relationship labels (family, friend, work)
+3. **Enriched context** - Provide organization, job title to help Brokkr understand who's messaging
+
+**Future iMessage integration point:**
+```javascript
+// In imessage-bot.js
+const { lookupContactByPhone } = require('./lib/contacts-lookup');
+
+function enrichContactMetadata(phoneNumber) {
+  const name = lookupContactByPhone(phoneNumber);
+  if (name) {
+    // Update contacts.json with discovered name
+    updateContactDisplayName(phoneNumber, name);
+  }
+}
+```
+
+### Research Sources
+
+- [MacScripter - Setting and Getting Contacts Info](https://www.macscripter.net/t/setting-and-getting-contacts-info/69391)
+- [bru6.de - JXA Automating Applications](https://bru6.de/jxa/automating-applications/)
+- [GitHub - macos-contacts-mcp](https://github.com/jcontini/macos-contacts-mcp)
+- [JXA Cookbook](https://github.com/JXA-Cookbook/JXA-Cookbook)
+- [Apple Support - Intro to Shortcuts](https://support.apple.com/guide/shortcuts-mac/intro-to-shortcuts-apdf22b0444c/mac)
+- [Scripting OS X - Avoiding AppleScript Security Requests](https://scriptingosx.com/2020/09/avoiding-applescript-security-and-privacy-requests/)

@@ -14,8 +14,8 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 
 | Plan | Status | Dependencies | Est. Tasks |
 |------|--------|--------------|------------|
-| [iMessage Skill](./2026-02-01-imessage-skill-plan.md) | Not Started | None | 10 |
-| [iMessage Advanced Assistant](./2026-02-01-imessage-advanced-assistant-plan.md) | Not Started | iMessage Skill | 26 |
+| [iMessage Skill](./2026-02-01-imessage-skill-plan.md) | ✅ Implemented | None | 9 |
+| [iMessage Advanced Assistant](./2026-02-01-imessage-advanced-assistant-plan.md) | Not Started | iMessage Skill (verify complete) | 26 |
 | [Email Skill](./2026-02-01-email-skill-plan.md) | Not Started | None | 15 |
 
 ### Phase 2: Apple Notifications (Priority: High - Foundation for Others)
@@ -133,7 +133,7 @@ Research completed using parallel agents against official Apple documentation:
 | Mail.app AppleScript | ✅ Complete | 90% plan coverage, add forward/BCC/attachments |
 | screencapture CLI | ✅ Complete | Add cursor capture, audio sources, permissions docs |
 | Notification Center | ✅ Complete | SQLite polling works, no real-time API exists |
-| Focus Modes | 🔲 Pending | Shortcuts integration needed |
+| Focus Modes | ⏸️ Deferred | **BRAINSTORM NEEDED:** Discuss benefit/use cases before planning. See Shortcuts plan. |
 | Bluetooth Control | ✅ Complete | Use blueutil CLI, no native AppleScript support |
 
 ### Key Research Findings
@@ -142,7 +142,7 @@ Research completed using parallel agents against official Apple documentation:
 
 2. **Email** - AppleScript fully functional. HTML composition broken since El Capitan. Forward command has duplication bug.
 
-3. **Screen Recording** - `screencapture -v` works. Add `-C` for cursor. Remotion 4.0 is 281% faster.
+3. **Screen Recording** - `screencapture -v` works. Add `-C` for cursor. Remotion 4.0 is 281% faster. **Delivery:** Recordings sent to Tommy via iMessage attachment.
 
 4. **Notifications** - Poll `$(getconf DARWIN_USER_DIR)/com.apple.notificationcenter/db2/db`. No permissions on Sonoma. Sequoia adds TCC.
 

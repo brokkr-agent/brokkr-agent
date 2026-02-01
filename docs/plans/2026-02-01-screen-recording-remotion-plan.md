@@ -8,7 +8,7 @@
 
 **Goal:** Enable Brokkr to create polished tutorial videos for brokkr.co by combining macOS screen recording with Remotion post-processing for intros, annotations, and professional output.
 
-**Architecture:** Two-phase workflow: (1) Screen capture skill using native macOS `screencapture -v` for raw recording, (2) Remotion project for post-processing with React-based templates for intros, callouts, and transitions. Recordings stored in iCloud, Remotion project in `remotion-videos/`. Output shared via iCloud Family Sharing.
+**Architecture:** Two-phase workflow: (1) Screen capture skill using native macOS `screencapture -v` for raw recording, (2) Remotion project for post-processing with React-based templates for intros, callouts, and transitions. Recordings stored in iCloud, Remotion project in `remotion-videos/`. **Delivery:** Final videos sent to Tommy via iMessage attachment (primary) with iCloud link as backup for large files.
 
 **Tech Stack:** macOS screencapture CLI, Node.js, Remotion framework (v4.0+), React, @remotion/transitions, iCloud Drive
 

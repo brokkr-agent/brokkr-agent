@@ -2,6 +2,19 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **REQUIRED DEPENDENCY:** This plan requires completing all tasks from
+> [iMessage Skill Plan](./2026-02-01-imessage-skill-plan.md) FIRST.
+>
+> **Before starting Task 10:** Verify base skill is complete:
+> ```bash
+> # Verify core files exist
+> ls -la lib/imessage-reader.js lib/imessage-sender.js imessage-bot.js
+> # Run base skill tests
+> npm test -- imessage
+> # Verify bot starts without errors
+> node imessage-bot.js --dry-run
+> ```
+
 **Goal:** Transform the iMessage bot from a Tommy-only command processor into a general-purpose AI assistant ("Brokkr") accessible to any iMessage contact, with self-expanding permissions, silent consultation for untrusted contacts, and group conversation awareness.
 
 **Architecture:**
@@ -87,7 +100,7 @@ Command permission is a **separate, explicit permission** that is NOT included i
 
 ## Phase 1: Core Infrastructure
 
-### Task 1: Contact Permissions Storage Module
+### Task 10: Contact Permissions Storage Module
 
 **Files:**
 - Create: `lib/imessage-permissions.js`
@@ -332,7 +345,7 @@ git commit -m "feat(imessage): add contact permissions storage module
 
 ---
 
-### Task 2: Create Initial Contacts.json Storage File
+### Task 11: Create Initial Contacts.json Storage File
 
 **Files:**
 - Create: `.claude/skills/imessage/contacts.json`
@@ -378,7 +391,7 @@ git commit -m "feat(imessage): add initial contacts.json with Tommy as trusted"
 
 ---
 
-### Task 3: Pending Questions Queue Module
+### Task 12: Pending Questions Queue Module
 
 **Files:**
 - Create: `lib/imessage-pending.js`
@@ -633,7 +646,7 @@ git commit -m "feat(imessage): add pending questions queue module
 
 ---
 
-### Task 4: Context Retrieval Module
+### Task 13: Context Retrieval Module
 
 **Files:**
 - Create: `lib/imessage-context.js`
@@ -786,7 +799,7 @@ git commit -m "feat(imessage): add context retrieval module
 
 ## Phase 2: Message Parser Updates
 
-### Task 5: Modify Message Parser to Handle Non-Command Messages
+### Task 14: Modify Message Parser to Handle Non-Command Messages
 
 **Files:**
 - Modify: `lib/message-parser.js`
@@ -881,7 +894,7 @@ git commit -m "feat(message-parser): add treatAsNatural option for non-command m
 
 ---
 
-### Task 6: Add /questions Command
+### Task 15: Add .questions Command
 
 **Files:**
 - Modify: `lib/builtin-commands.js`
@@ -934,7 +947,7 @@ git commit -m "feat(commands): add /questions command for pending approvals"
 
 ---
 
-### Task 7: Add /digest Command
+### Task 16: Add .digest Command
 
 **Files:**
 - Modify: `lib/builtin-commands.js`
@@ -989,7 +1002,7 @@ git commit -m "feat(commands): add /digest command for daily summaries"
 
 ---
 
-### Task 8: Command Permission Checker
+### Task 17: Command Permission Checker
 
 **Files:**
 - Create: `lib/command-permissions.js`
@@ -1185,7 +1198,7 @@ git commit -m "feat(imessage): add command permission checker
 
 ## Phase 3: Universal Access in imessage-bot.js
 
-### Task 9: Refactor imessage-bot.js to Accept Any Contact
+### Task 18: Refactor imessage-bot.js to Accept Any Contact
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -1295,7 +1308,7 @@ git commit -m "feat(imessage-bot): add universal access filtering option
 
 ---
 
-### Task 9: Add Tommy Detection Helper
+### Task 19: Add Tommy Detection Helper
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -1356,7 +1369,7 @@ git commit -m "feat(imessage-bot): add isTommyMessage helper function"
 
 ---
 
-### Task 11: Differentiate Pre-Alert Behavior by Contact
+### Task 20: Differentiate Pre-Alert Behavior by Contact
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -1448,7 +1461,7 @@ git commit -m "feat(imessage-bot): differentiate pre-alert messages by contact
 
 ## Phase 4: Consultation Flow
 
-### Task 12: Silent Consultation Handler
+### Task 21: Silent Consultation Handler
 
 **Files:**
 - Create: `lib/imessage-consultation.js`
@@ -1622,7 +1635,7 @@ git commit -m "feat(imessage): add silent consultation flow module
 
 ---
 
-### Task 13: Integrate Consultation into processCommand
+### Task 22: Integrate Consultation into processCommand
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -1729,7 +1742,7 @@ git commit -m "feat(imessage-bot): integrate consultation flow for untrusted con
 
 ---
 
-### Task 14: Handle Consultation Response (/<xx> allow/deny)
+### Task 23: Handle Consultation Response (/<xx> allow/deny)
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -1838,7 +1851,7 @@ git commit -m "feat(imessage-bot): handle consultation allow/deny responses
 
 ## Phase 5: Group Conversation State Machine
 
-### Task 15: Group Monitor Module
+### Task 24: Group Monitor Module
 
 **Files:**
 - Create: `lib/group-monitor.js`
@@ -2100,7 +2113,7 @@ git commit -m "feat(imessage): add group conversation state machine
 
 ---
 
-### Task 16: Add Group Chat Reader Functions
+### Task 25: Add Group Chat Reader Functions
 
 **Files:**
 - Modify: `lib/imessage-reader.js`
@@ -2243,7 +2256,7 @@ git commit -m "feat(imessage-reader): add group chat query functions
 
 ## Phase 6: /questions and /digest Command Handlers
 
-### Task 17: Implement .questions Handler
+### Task 26: Implement .questions Handler
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -2342,7 +2355,7 @@ git commit -m "feat(imessage-bot): implement /questions command handler
 
 ---
 
-### Task 18: Implement .digest Handler (Placeholder)
+### Task 27: Implement .digest Handler (Placeholder)
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -2405,7 +2418,7 @@ git commit -m "feat(imessage-bot): add placeholder /digest handler
 
 ## Phase 7: Full Integration
 
-### Task 19: Update pollMessages for Universal Access
+### Task 28: Update pollMessages for Universal Access
 
 **Files:**
 - Modify: `imessage-bot.js`
@@ -2466,7 +2479,7 @@ git commit -m "feat(imessage-bot): enable universal access mode via --universal 
 
 ---
 
-### Task 20: Add getAllRecentMessages to imessage-reader
+### Task 29: Add getAllRecentMessages to imessage-reader
 
 **Files:**
 - Modify: `lib/imessage-reader.js`
@@ -2557,7 +2570,7 @@ git commit -m "feat(imessage-reader): add getAllRecentMessages for universal acc
 
 ---
 
-### Task 21: Update SKILL.md Documentation
+### Task 30: Update SKILL.md Documentation
 
 **Files:**
 - Modify: `.claude/skills/imessage/SKILL.md`
@@ -2650,7 +2663,7 @@ git commit -m "docs(imessage): update SKILL.md with advanced assistant capabilit
 
 ## Phase 8: User Testing
 
-### Task 22: Testing Phase 1 - Tommy Direct Messages
+### Task 31: Testing Phase 1 - Tommy Direct Messages
 
 **Manual Testing Steps:**
 
@@ -2693,7 +2706,7 @@ git commit -m "docs(imessage): update SKILL.md with advanced assistant capabilit
 
 ---
 
-### Task 23: Testing Phase 2 - Multi-Contact Permissions
+### Task 32: Testing Phase 2 - Multi-Contact Permissions
 
 **Prerequisites:**
 - Identify 1-2 test contacts
@@ -2747,7 +2760,7 @@ git commit -m "docs(imessage): update SKILL.md with advanced assistant capabilit
 
 ---
 
-### Task 24: Testing Phase 3 - Group Chat
+### Task 33: Testing Phase 3 - Group Chat
 
 **Prerequisites:**
 - Create group chat with Tommy + 1-2 contacts
@@ -2778,7 +2791,7 @@ git commit -m "docs(imessage): update SKILL.md with advanced assistant capabilit
 
 ---
 
-### Task 25: Final Integration Test
+### Task 34: Final Integration Test
 
 **Run all automated tests:**
 ```bash
@@ -2799,7 +2812,7 @@ node scripts/test-imessage.js
 
 ---
 
-### Task 26: Commit Final Changes and Update Sprint
+### Task 35: Commit Final Changes and Update Sprint
 
 **Step 1: Final commit**
 
@@ -2844,6 +2857,6 @@ This plan transforms the iMessage bot into a full AI assistant with:
 5. **Group Conversations** - State machine for intelligent participation
 6. **New Commands** - `/questions` and `/digest` for Tommy
 
-**Total Tasks:** 26
+**Total Tasks:** 26 (Tasks 10-35, continues from iMessage Skill Plan Tasks 1-9)
 **Estimated Time:** 4-6 hours with TDD
 **Primary Contact Method:** iMessage (not WhatsApp)
