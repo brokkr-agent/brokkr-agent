@@ -3,12 +3,121 @@
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
+>
+> **Architecture Reference:** See `docs/concepts/2026-02-01-apple-integration-architecture.md` for standardized patterns.
 
 **Goal:** Create a skill for controlling Apple Music playback and managing the music library via AppleScript, enabling Brokkr to play/pause music, search the library, get now playing info, and manage playlists.
 
 **Architecture:** AppleScript-based skill with Node.js wrapper modules that execute AppleScript commands via `osascript`. Provides reusable functions for playback control (play, pause, next, prev), library search, now playing info, and playlist management. Works with tracks in the user's Music library.
 
 **Tech Stack:** AppleScript (Music.app dictionary), Node.js (child_process for osascript execution), no additional dependencies
+
+---
+
+## Skill Directory Structure
+
+```
+skills/music/
+├── SKILL.md                    # Main instructions (standard header)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── music.js                # Core functionality (re-exports modules)
+│   ├── applescript-utils.js    # AppleScript execution utilities
+│   ├── playback.js             # Playback control utilities
+│   ├── now-playing.js          # Now playing info utilities
+│   ├── library.js              # Library search utilities
+│   ├── playlists.js            # Playlist management utilities
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   └── music-dictionary.md
+├── scripts/                    # Reusable automation scripts
+│   └── *.applescript
+└── tests/
+    ├── applescript-utils.test.js
+    ├── playback.test.js
+    ├── now-playing.test.js
+    ├── library.test.js
+    └── playlists.test.js
+```
+
+## Command File
+
+Create `.claude/commands/music.md`:
+
+```yaml
+---
+name: music
+description: Control Apple Music playback and library
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the Music skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## iCloud Storage Integration
+
+Use `lib/icloud-storage.js` for playlist exports and artwork:
+
+```javascript
+const { getPath } = require('../../lib/icloud-storage');
+
+// Save album artwork to iCloud
+const artworkPath = getPath('exports', `artwork-${trackId}.jpg`);
+
+// Export playlist to iCloud
+const playlistPath = getPath('exports', `playlist-${name}-${Date.now()}.m3u`);
+```
+
+## Notification Processing Criteria
+
+| Event | Queue If | Drop If |
+|-------|----------|---------|
+| Playback control request | Command from WhatsApp/iMessage | Automated player state changes |
+| Now playing query | User requests current track | Routine track changes |
+| Library sync complete | New tracks added | Background sync |
+
+## SKILL.md Standard Header
+
+```yaml
+---
+name: music
+description: Control Apple Music playback and manage library. Play/pause, search tracks, manage playlists.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# Music Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
+## Capabilities
+
+- Playback control (play, pause, next, previous, stop)
+- Now playing information retrieval
+- Library search by artist, album, title
+- Playlist management (create, delete, add tracks)
+- Volume and position control
+
+## Usage
+
+### Via Command (Manual)
+```
+/music play
+/music search The Beatles
+/music now
+```
+
+### Via Notification (Automatic)
+Triggered by playback control requests from messages.
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs.
+```
 
 ---
 

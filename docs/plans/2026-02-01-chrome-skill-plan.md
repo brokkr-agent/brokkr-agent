@@ -3,12 +3,118 @@
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
+>
+> **Architecture Reference:** See `docs/concepts/2026-02-01-apple-integration-architecture.md` for standardized patterns.
 
 **Goal:** Formalize Chrome browser automation capabilities into a reusable skill with efficient patterns for page navigation, content extraction, form interaction, screenshot capture, and session management. This skill provides programmatic web automation for Brokkr agent tasks.
 
 **Architecture:** Create a Puppeteer-based skill that leverages the existing Chrome installation (already used by WhatsApp bot). Uses browser contexts for session isolation, allowing WhatsApp and agent tasks to coexist without conflicts. Provides reusable JavaScript modules for common patterns (navigation, forms, extraction) with robust error handling and retry logic. Skill scripts are invoked via Node.js from worker.js.
 
 **Tech Stack:** Puppeteer (whatsapp-web.js already includes this), Node.js, existing Chrome "for Testing" installation, shared browser instance with isolated contexts
+
+---
+
+## Skill Directory Structure
+
+```
+skills/chrome/
+├── SKILL.md                    # Main instructions (standard header)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── chrome.js               # Core functionality (browser-manager)
+│   ├── navigation.js           # Page navigation utilities
+│   ├── extraction.js           # Content extraction utilities
+│   ├── forms.js                # Form interaction utilities
+│   ├── screenshots.js          # Screenshot capture utilities
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   └── puppeteer-api.md
+├── scripts/                    # Reusable automation scripts
+│   └── *.sh
+└── tests/
+    ├── browser-manager.test.js
+    ├── navigation.test.js
+    ├── extraction.test.js
+    ├── forms.test.js
+    └── screenshots.test.js
+```
+
+## Command File
+
+Create `.claude/commands/chrome.md`:
+
+```yaml
+---
+name: chrome
+description: Control Chrome browser for web automation tasks
+argument-hint: [action] [url] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the Chrome skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## iCloud Storage Integration
+
+Use `lib/icloud-storage.js` for screenshots and downloads:
+
+```javascript
+const { getPath } = require('../../lib/icloud-storage');
+
+// Save screenshot to iCloud
+const screenshotPath = getPath('exports', `screenshot-${Date.now()}.png`);
+
+// Save downloaded file to iCloud
+const downloadPath = getPath('attachments', filename);
+```
+
+## Notification Processing Criteria
+
+| Event | Queue If | Drop If |
+|-------|----------|---------|
+| Download complete | File matches watched types (PDF, CSV, etc.) | Temporary or cache files |
+| Bookmark sync | Bookmark added from monitored folders | Browser internal changes |
+
+## SKILL.md Standard Header
+
+```yaml
+---
+name: chrome
+description: Control Chrome browser for web automation. Navigate pages, extract content, fill forms, capture screenshots.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# Chrome Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
+## Capabilities
+
+- Page navigation with retry logic
+- Content extraction (text, HTML, structured data)
+- Form interaction (type, click, select, submit)
+- Screenshot capture (viewport, full page, element)
+- Session isolation via browser contexts
+
+## Usage
+
+### Via Command (Manual)
+```
+/chrome navigate https://example.com
+/chrome screenshot https://example.com
+```
+
+### Via Notification (Automatic)
+Triggered when downloads complete or bookmarks sync.
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs.
+```
 
 ---
 

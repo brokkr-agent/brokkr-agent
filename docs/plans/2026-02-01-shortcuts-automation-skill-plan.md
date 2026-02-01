@@ -1,14 +1,108 @@
 # Shortcuts/Automation Skill Implementation Plan
 
+> **Architecture Reference:** This plan follows the standardized patterns defined in
+> `docs/concepts/2026-02-01-apple-integration-architecture.md`
+
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
 
 **Goal:** Add Shortcuts skill to enable running macOS Shortcuts automations, bridging to capabilities without direct AppleScript support (Focus Modes, Location Services, iOS integrations).
 
-**Architecture:** Create a skill that provides both AppleScript (via Shortcuts Events) and CLI-based (`/usr/bin/shortcuts`) access to macOS Shortcuts. The skill will support running shortcuts by name, listing available shortcuts, and specialized commands for Focus Mode status and location retrieval. Commands will be registered in `lib/builtin-commands.js` and use skill pattern similar to research/email skills.
+**Architecture:** This IS the bridge to Apple Shortcuts app for the Apple Integration suite. Provides access to macOS Shortcuts via AppleScript (Shortcuts Events) and CLI. Other skills use this to access iOS-only capabilities, Focus Modes, Location Services, and HomeKit. Follows the standardized Apple Integration skill structure.
 
-**Tech Stack:** Node.js, osascript (Shortcuts Events AppleScript), `/usr/bin/shortcuts` CLI, JXA (for Focus Mode reading), AppleScript helper scripts in `skills/shortcuts/`
+**Tech Stack:** Node.js, osascript (Shortcuts Events AppleScript), `/usr/bin/shortcuts` CLI, JXA (for Focus Mode reading), lib/icloud-storage.js for storing outputs
+
+---
+
+## Skill Directory Structure
+
+```
+skills/shortcuts/
+├── SKILL.md                    # Main instructions (standard header)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── shortcuts.js            # Core shortcuts runner
+│   ├── shortcuts-lister.js     # List available shortcuts
+│   ├── focus-reader.js         # Read Focus mode via JXA
+│   ├── location-reader.js      # Get location via Shortcuts bridge
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   ├── shortcuts-events.md     # AppleScript Shortcuts Events reference
+│   ├── focus-mode.md           # Focus mode reading documentation
+│   └── location-bridge.md      # Location via Shortcuts workaround
+├── scripts/                    # Reusable automation scripts
+│   ├── run-shortcut.scpt       # AppleScript to run shortcuts
+│   ├── list-shortcuts.scpt     # AppleScript to list shortcuts
+│   └── get-focus.jxa           # JXA script to read Focus mode
+└── tests/
+    ├── shortcuts-runner.test.js
+    ├── shortcuts-lister.test.js
+    ├── focus-reader.test.js
+    └── location-reader.test.js
+```
+
+## Command File
+
+**Location:** `.claude/commands/shortcuts.md`
+
+```yaml
+---
+name: shortcuts
+description: Bridge to Apple Shortcuts app - run shortcuts, check Focus mode, get location
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+Load the Shortcuts skill and process: $ARGUMENTS
+
+Available actions:
+- run <shortcut-name> [input] - Run a macOS shortcut
+- list - List all available shortcuts
+- focus - Get current Focus mode
+- location - Get current location (via Shortcuts bridge)
+
+This skill bridges to Apple Shortcuts for:
+- iOS integrations (HomeKit, iMessages, etc.)
+- Focus Mode detection
+- Location Services
+- Any automation without direct AppleScript support
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## How Other Skills Use This
+
+The Shortcuts skill provides a bridge for capabilities without direct API access:
+
+```javascript
+// In skills/bluetooth/lib/device-manager.js
+import { runShortcut } from '../../../skills/shortcuts/lib/shortcuts.js';
+
+// Control AirPods noise mode via Shortcuts
+await runShortcut('AirPods Noise Control');
+
+// In notification monitor
+import { getCurrentFocus } from '../../../skills/shortcuts/lib/focus-reader.js';
+
+// Check Focus mode before sending notifications
+const focus = await getCurrentFocus();
+if (focus === 'Work' || focus === 'Do Not Disturb') {
+  // Queue instead of sending immediately
+}
+```
+
+## iCloud Storage Integration
+
+Use `lib/icloud-storage.js` for storing shortcut outputs:
+
+```javascript
+import { getPath } from '../../lib/icloud-storage.js';
+
+// Store shortcut outputs in iCloud
+const outputPath = getPath('exports', `shortcut-output-${date}.txt`);
+```
 
 ---
 
@@ -1371,14 +1465,55 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ## Task 7: Skill Documentation
 
 **Files:**
-- Create: `skills/shortcuts/skill.md`
+- Create: `skills/shortcuts/SKILL.md`
 
-### Step 1: Create skill.md
+### Step 1: Create SKILL.md with standard header
+
+```yaml
+---
+name: shortcuts
+description: Bridge to Apple Shortcuts app - run shortcuts, Focus mode, location, iOS integrations
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+```
 
 ```markdown
 # Shortcuts/Automation Skill
 
+> **For Claude:** This skill is the BRIDGE to Apple Shortcuts for the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
 Run macOS Shortcuts automations and access system features without direct AppleScript support.
+
+## Capabilities
+
+- Run any macOS Shortcut by name
+- List all available shortcuts
+- Read current Focus mode
+- Get current location (via Shortcuts bridge)
+- Bridge to iOS-only capabilities (HomeKit, etc.)
+- Store outputs in iCloud via lib/icloud-storage.js
+
+## Usage
+
+### Via Command (Manual)
+```
+/shortcuts run "Morning Routine"
+/shortcuts run "Process Text" "Hello World"
+/shortcuts list
+/shortcuts focus
+/shortcuts location
+```
+
+### Via Notification (Automatic)
+Triggered by notification monitor for Focus mode changes or scheduled automations.
+
+### Via Other Skills
+```javascript
+import { runShortcut } from '../shortcuts/lib/shortcuts.js';
+import { getCurrentFocus } from '../shortcuts/lib/focus-reader.js';
+import { getCurrentLocation } from '../shortcuts/lib/location-reader.js';
+```
 
 ## Commands
 

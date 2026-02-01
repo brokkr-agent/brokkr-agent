@@ -1,14 +1,123 @@
 # Apple Notification Integration Implementation Plan
 
+> **Architecture Reference:** This plan follows the standardized patterns defined in
+> `docs/concepts/2026-02-01-apple-integration-architecture.md`
+
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
 
 **Goal:** Enable Brokkr to receive and process macOS Notification Center notifications from integrated apps (Messages, Mail, Calendar), with logical processing rules to determine when to invoke the agent.
 
-**Architecture:** Poll the macOS Notification Center SQLite database at `$(getconf DARWIN_USER_DIR)/com.apple.notificationcenter/db2/db` every 5 seconds using Node.js. Parse binary plist notification data, route to app-specific handlers, and invoke agent based on configurable trigger rules. Runs as a separate `notification-monitor.js` process managed by PM2.
+**Architecture:** This IS the central notification monitor for the Apple Integration suite. Polls the macOS Notification Center SQLite database every 5 seconds, uses a notification-processor subagent to evaluate each notification, and invokes appropriate skills (iMessage, Mail, Calendar, etc.) based on configurable trigger rules. Follows the standardized Apple Integration skill structure.
 
-**Tech Stack:** Node.js, SQLite3 (better-sqlite3), binary plist parsing (bplist-parser), child_process for plutil fallback
+**Tech Stack:** Node.js, SQLite3 (better-sqlite3), binary plist parsing (bplist-parser), lib/icloud-storage.js for notification logs
+
+---
+
+## Skill Directory Structure
+
+```
+skills/notifications/
+├── SKILL.md                    # Main instructions (standard header)
+├── config.json                 # Integration-specific config (rules, timing)
+├── lib/
+│   ├── notifications.js        # Core notification database reader
+│   ├── notification-parser.js  # Binary plist parser
+│   ├── notification-rules.js   # Trigger rules engine
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   ├── database-schema.md      # Notification Center DB schema
+│   └── app-identifiers.md      # Bundle ID to friendly name mapping
+├── scripts/                    # Reusable automation scripts
+│   ├── test-notifications.sh   # Integration test script
+│   └── check-db-access.sh      # Verify database access
+└── tests/
+    ├── notification-db.test.js
+    ├── notification-parser.test.js
+    └── notification-rules.test.js
+```
+
+## Command File
+
+**Location:** `.claude/commands/notifications.md`
+
+```yaml
+---
+name: notifications
+description: Monitor and process macOS Notification Center notifications
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+Load the Notifications skill and process: $ARGUMENTS
+
+Available actions:
+- status - Check notification monitor status
+- recent [count] - List recent notifications
+- rules - Show active trigger rules
+- test <rule-name> - Test a specific rule
+
+This skill is the central notification monitor that invokes other skills:
+- iMessage notifications → /imessage skill
+- Mail notifications → /mail skill
+- Calendar notifications → /calendar skill
+```
+
+## Notification-Processor Subagent
+
+**Location:** `.claude/agents/notification-processor.md`
+
+This is the central evaluator for ALL incoming notifications in the Apple Integration suite.
+
+```yaml
+---
+name: notification-processor
+description: Evaluate system notifications and decide if agent should be queued
+tools: Read, Grep
+model: haiku
+permissionMode: dontAsk
+---
+
+You are a notification filter for the Brokkr agent. Analyze incoming notifications and decide:
+
+1. Should the agent be queued? (yes/no)
+2. What skill/command should be invoked?
+3. What priority? (CRITICAL/HIGH/NORMAL/LOW)
+
+Notification data: $ARGUMENTS
+
+## Decision Criteria
+
+| Source | Queue If | Drop If |
+|--------|----------|---------|
+| iMessage | From known contacts, contains command prefix | Spam, unknown numbers, group chats |
+| Email | Marked important, from whitelist, actionable keywords | Marketing, bulk, newsletters |
+| Calendar | Reminder for event with agent notes | Past events, declined events |
+| Reminders | Has agent tag, near due date | Already completed |
+| System | Focus mode changes, device connects | Routine battery/wifi |
+
+## Output JSON
+
+{
+  "queue": true/false,
+  "command": "/imessage respond ...",
+  "skill": "imessage",
+  "priority": "HIGH",
+  "reason": "Why this decision"
+}
+```
+
+## iCloud Storage Integration
+
+Use `lib/icloud-storage.js` for storing notification logs and processed data:
+
+```javascript
+import { getPath } from '../../lib/icloud-storage.js';
+
+// Store notification logs in iCloud
+const logPath = getPath('exports', `notifications-${date}.json`);
+```
 
 ---
 
@@ -1387,20 +1496,72 @@ git commit -m "feat(bot-control): add notification monitor management"
 ## Task 8: Skill Documentation
 
 **Files:**
-- Create: `skills/notifications/skill.md`
+- Create: `skills/notifications/SKILL.md`
 
-### Step 1: Create skill documentation
+### Step 1: Create skill documentation with standard header
 
 ```bash
 mkdir -p skills/notifications
 ```
 
+```yaml
+---
+name: notifications
+description: Central notification monitor for Apple Integration suite - evaluates and routes all system notifications
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+```
+
 ```markdown
 # Notification Monitoring Skill
 
+> **For Claude:** This skill is the CENTRAL notification monitor for the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
 ## Overview
 
-Monitor macOS Notification Center for notifications from integrated apps (Messages, Mail, Calendar) and invoke the Brokkr agent when trigger conditions are met.
+Monitor macOS Notification Center for notifications from integrated apps (Messages, Mail, Calendar) and invoke the appropriate skills when trigger conditions are met.
+
+## Capabilities
+
+- Poll Notification Center database every 5 seconds
+- Parse binary plist notification data
+- Evaluate notifications via notification-processor subagent
+- Route to appropriate skills (iMessage, Mail, Calendar, etc.)
+- Store notification logs in iCloud via lib/icloud-storage.js
+
+## Usage
+
+### Via Command (Manual)
+```
+/notifications status
+/notifications recent 10
+/notifications rules
+/notifications test urgent-email
+```
+
+### Via Automatic Monitoring
+Runs as a background process managed by PM2. Automatically invokes skills based on trigger rules.
+
+## How This Skill Invokes Other Skills
+
+When a notification matches a rule:
+
+1. **notification-processor subagent** evaluates the notification
+2. Returns which skill/command to invoke
+3. Notification monitor queues the job with appropriate priority
+4. Worker loads the required skill and executes
+
+Example flow:
+```
+iMessage notification received
+    ↓
+notification-processor: {queue: true, skill: "imessage", priority: "HIGH"}
+    ↓
+Queue job: /imessage respond to "Tommy: Hey, can you check the server?"
+    ↓
+Worker loads skills/imessage/SKILL.md and processes
+```
 
 ## Architecture
 

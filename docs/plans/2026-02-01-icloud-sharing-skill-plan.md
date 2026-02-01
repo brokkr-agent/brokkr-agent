@@ -1,4 +1,7 @@
-# iCloud Family Sharing Skill Implementation Plan
+# iCloud Sharing Skill Implementation Plan
+
+> **Architecture Reference:** This plan follows the standardized patterns defined in
+> `docs/concepts/2026-02-01-apple-integration-architecture.md`
 
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
@@ -6,9 +9,112 @@
 
 **Goal:** Enable Brokkr to share files with Tommy via iCloud Drive, check sync status, and retrieve shared files, allowing seamless file exchange between the agent and user.
 
-**Architecture:** Create shell-based utilities that interact with iCloud Drive at `~/Library/Mobile Documents/com~apple~CloudDocs/` using the `brctl` command-line tool for sync status checking and standard file operations for sharing. Uses a dedicated `Brokkr-Shared/` folder within iCloud Drive for organized file exchange.
+**Architecture:** This IS the core iCloud storage provider for all Apple Integration skills. Provides `lib/icloud-storage.js` shared library that all other skills use for storing large files (recordings, exports, attachments, research). Uses standardized folder organization with date-based subdirectories.
 
-**Tech Stack:** Bash scripts, brctl (iCloud Drive CLI), standard Unix file utilities (cp, mv, ls), mdls for file metadata
+**Tech Stack:** Node.js, Bash scripts, brctl (iCloud Drive CLI), standard Unix file utilities
+
+---
+
+## Skill Directory Structure
+
+```
+skills/icloud-sharing/
+├── SKILL.md                    # Main instructions (standard header)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── icloud-sharing.js       # Core file sharing functionality
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   ├── brctl-commands.md       # brctl CLI reference
+│   └── icloud-paths.md         # iCloud Drive path documentation
+├── scripts/                    # Reusable automation scripts
+│   ├── share-file.sh           # Share a file to iCloud
+│   ├── sync-status.sh          # Check sync status
+│   ├── list-shared.sh          # List shared files
+│   └── get-shared.sh           # Retrieve shared file
+└── tests/
+    ├── icloud-sharing.test.js
+    └── icloud-sharing-integration.test.js
+```
+
+## Command File
+
+**Location:** `.claude/commands/icloud.md`
+
+```yaml
+---
+name: icloud
+description: Share files via iCloud Drive and manage sync status
+argument-hint: [action] [file] [args...]
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+Load the iCloud Sharing skill and process: $ARGUMENTS
+
+Available actions:
+- share <file> [name] - Share a file to iCloud Drive
+- list - List shared files
+- get <filename> [destination] - Retrieve a shared file
+- status <file> - Check iCloud sync status
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## Shared Library: lib/icloud-storage.js
+
+This is the CORE storage provider used by all Apple Integration skills.
+
+```javascript
+// lib/icloud-storage.js
+const path = require('path');
+const fs = require('fs');
+
+const ICLOUD_BASE = path.join(
+  process.env.HOME,
+  'Library/Mobile Documents/com~apple~CloudDocs/Brokkr'
+);
+
+const CATEGORIES = {
+  recordings: 'Recordings',    // Screen recordings, audio
+  exports: 'Exports',          // Generated content, reports
+  attachments: 'Attachments',  // Email attachments, downloads
+  research: 'Research'         // Agent research outputs
+};
+
+function getDateFolder() {
+  return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+function ensureDirectory(category) {
+  const dir = path.join(ICLOUD_BASE, CATEGORIES[category], getDateFolder());
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function getPath(category, filename) {
+  const dir = ensureDirectory(category);
+  return path.join(dir, filename);
+}
+
+module.exports = { ICLOUD_BASE, CATEGORIES, ensureDirectory, getPath };
+```
+
+## How Other Skills Use This
+
+All Apple Integration skills import `lib/icloud-storage.js`:
+
+```javascript
+// In skills/bluetooth/lib/device-manager.js
+import { getPath } from '../../../lib/icloud-storage.js';
+
+const researchPath = getPath('research', `bluetooth-device-${name}.md`);
+
+// In skills/notifications/notification-monitor.js
+import { getPath } from '../../../lib/icloud-storage.js';
+
+const logPath = getPath('exports', `notifications-${date}.json`);
+```
 
 ---
 
@@ -947,16 +1053,72 @@ git commit -m "feat(icloud): add integration module for sharing functions"
 ## Task 6: Skill Documentation
 
 **Files:**
-- Create: `skills/icloud-sharing/skill.md`
+- Create: `skills/icloud-sharing/SKILL.md`
 
-### Step 1: Create documentation
+### Step 1: Create documentation with standard header
+
+```yaml
+---
+name: icloud-sharing
+description: Core iCloud storage provider for Apple Integration suite - share files and manage iCloud Drive
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+```
 
 ```markdown
-# iCloud Family Sharing Skill
+# iCloud Sharing Skill
+
+> **For Claude:** This skill is the CORE storage provider for the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
 
 ## Overview
 
-Share files between Brokkr and Tommy via iCloud Drive folder sharing. Enables seamless file exchange for reports, screenshots, downloads, and data exports.
+Share files between Brokkr and Tommy via iCloud Drive folder sharing. Provides the `lib/icloud-storage.js` shared library that ALL other Apple Integration skills use for storing large files.
+
+## Capabilities
+
+- Share files to iCloud Drive Brokkr-Shared folder
+- List shared files with size and modification time
+- Retrieve shared files from Tommy
+- Check iCloud sync status via brctl
+- Provide standardized storage paths for all skills
+
+## Usage
+
+### Via Command (Manual)
+```
+/icloud share ~/Desktop/report.pdf
+/icloud share /tmp/data.csv 2026-02-01-data.csv
+/icloud list
+/icloud get report.pdf
+/icloud status ~/path/to/file
+```
+
+### Via Shared Library (Other Skills)
+```javascript
+import { getPath, ensureDirectory } from '../../../lib/icloud-storage.js';
+
+// Store in appropriate category
+const path = getPath('recordings', 'screen-capture.mp4');
+const path = getPath('exports', 'daily-report.pdf');
+const path = getPath('attachments', 'email-attachment.pdf');
+const path = getPath('research', 'device-findings.md');
+```
+
+## Storage Organization
+
+```
+~/Library/Mobile Documents/com~apple~CloudDocs/
+└── Brokkr/
+    ├── Recordings/              # Screen recordings, audio
+    │   └── YYYY-MM-DD/
+    ├── Exports/                 # Generated content, reports
+    │   └── YYYY-MM-DD/
+    ├── Attachments/             # Email attachments, downloads
+    │   └── YYYY-MM-DD/
+    └── Research/                # Agent research outputs
+        └── YYYY-MM-DD/
+```
 
 ## Configuration
 

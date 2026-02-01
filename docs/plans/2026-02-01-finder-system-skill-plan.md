@@ -3,12 +3,120 @@
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
+>
+> **Architecture Reference:** See `docs/concepts/2026-02-01-apple-integration-architecture.md` for standardized patterns.
 
 **Goal:** Enable Brokkr to perform advanced file operations (move, copy, rename), search via Spotlight, manage clipboard, and attach folder action automation scripts.
 
 **Architecture:** Hybrid approach using AppleScript for Finder operations (preserves metadata), shell commands for Spotlight search (mdfind/mdls), and both AppleScript and shell for clipboard. Folder actions attached via System Events AppleScript. All operations exposed through Node.js integration module.
 
 **Tech Stack:** AppleScript, osascript, bash, mdfind/mdls, pbcopy/pbpaste, System Events, Node.js
+
+---
+
+## Skill Directory Structure
+
+```
+skills/finder/
+├── SKILL.md                    # Main instructions (standard header)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── finder.js               # Core functionality
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   ├── finder-dictionary.md
+│   └── spotlight-attributes.md
+├── scripts/                    # Reusable automation scripts
+│   ├── file-operations.scpt
+│   ├── spotlight-search.sh
+│   ├── file-metadata.sh
+│   ├── clipboard.scpt
+│   ├── clipboard.sh
+│   ├── attach-folder-action.scpt
+│   └── folder-action-template.scpt
+└── tests/
+    ├── finder-operations.test.js
+    └── finder-system-integration.test.js
+```
+
+## Command File
+
+Create `.claude/commands/finder.md`:
+
+```yaml
+---
+name: finder
+description: File operations, Spotlight search, clipboard management
+argument-hint: [action] [path] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the Finder skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## iCloud Storage Integration
+
+Use `lib/icloud-storage.js` for file exports and organized storage:
+
+```javascript
+const { getPath, ensureDirectory } = require('../../lib/icloud-storage');
+
+// Move file to iCloud organized storage
+const exportPath = getPath('exports', filename);
+
+// Save clipboard content to iCloud
+const clipboardPath = getPath('exports', `clipboard-${Date.now()}.txt`);
+```
+
+## Notification Processing Criteria
+
+| Event | Queue If | Drop If |
+|-------|----------|---------|
+| File added to watched folder | Matches monitored file types | System/temp files |
+| File modified in project | Part of active project | Binary/build files |
+| Folder action triggered | Custom action script attached | Routine Finder operations |
+
+## SKILL.md Standard Header
+
+```yaml
+---
+name: finder
+description: Finder file operations, Spotlight search, clipboard management, folder actions. Preserves metadata.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# Finder Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
+## Capabilities
+
+- File operations (move, copy, rename, delete) preserving metadata
+- Spotlight search with metadata queries
+- Clipboard get/set operations
+- Folder action attachment and management
+- File metadata inspection
+
+## Usage
+
+### Via Command (Manual)
+```
+/finder search "meeting notes"
+/finder move /path/to/file /destination
+/finder clipboard get
+```
+
+### Via Notification (Automatic)
+Triggered by folder actions when files added to monitored folders.
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs.
+```
 
 ---
 

@@ -1,5 +1,7 @@
 # Apple Mail Integration Implementation Plan
 
+> **Architecture:** This plan follows [Apple Integration Architecture](../concepts/2026-02-01-apple-integration-architecture.md).
+
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
@@ -9,6 +11,121 @@
 **Architecture:** Create a self-contained `skills/email/` skill with AppleScript files for each operation. Register `/email` command with subcommands (read, compose, reply, delete, search). All scripts communicate via JSON for structured data exchange. Use polling for inbox checks rather than push notifications (Phase 7 handles notifications).
 
 **Tech Stack:** AppleScript (.scpt), Node.js (command handler), Apple Mail.app on macOS 14.8.3 (Sonoma)
+
+---
+
+## Standardized Skill Structure
+
+```
+skills/email/
+├── SKILL.md                    # Main instructions (with frontmatter)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── email.js                # Core functionality (handler)
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   └── applescript-mail.md
+├── scripts/                    # Reusable AppleScript files
+│   ├── list-inbox.scpt
+│   ├── read-message.scpt
+│   ├── compose.scpt
+│   ├── reply.scpt
+│   ├── delete.scpt
+│   ├── search.scpt
+│   ├── flag.scpt
+│   ├── mark-read.scpt
+│   ├── list-folders.scpt
+│   ├── move-to-folder.scpt
+│   ├── forward.scpt
+│   └── save-attachments.scpt
+└── tests/
+    └── email.test.js
+```
+
+## Command File
+
+**Location:** `.claude/commands/email.md`
+
+```yaml
+---
+name: email
+description: Read, compose, and manage email via Apple Mail
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the email skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## SKILL.md Standard Header
+
+**Location:** `skills/email/SKILL.md`
+
+```yaml
+---
+name: email
+description: Apple Mail integration for reading, composing, and managing emails. Use for email triage, responses, and organization.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# Apple Mail Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
+## Capabilities
+
+- Read inbox and specific messages
+- Compose and send new emails
+- Reply to messages (with reply-all option)
+- Delete messages (move to trash)
+- Search by sender, subject, or content
+- Flag/unflag messages
+- Move messages between folders
+- Auto-triage based on urgency keywords
+
+## Usage
+
+### Via Command (Manual)
+```
+/email
+/email read <id>
+/email compose <to> <subject>
+/email reply <id>
+/email search <query>
+```
+
+### Via Notification (Automatic)
+Triggered by notification monitor when criteria met.
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs.
+```
+
+## iCloud Storage Integration
+
+Email attachments stored using `lib/icloud-storage.js`:
+
+```javascript
+// Attachments from emails → iCloud
+const { getPath } = require('../../lib/icloud-storage.js');
+const attachmentPath = getPath('attachments', `email-${messageId}-${filename}`);
+// → ~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Attachments/YYYY-MM-DD/email-*.ext
+```
+
+## Notification Processing Criteria
+
+| Criteria | Queue If | Drop If |
+|----------|----------|---------|
+| Sender | From whitelist/urgent senders | Marketing, newsletters, bulk |
+| Subject | Contains urgent keywords | Regular notifications |
+| Importance | Marked as important | Low priority |
+| Flags | Already flagged | Already processed |
+| Content | Actionable keywords present | Informational only |
 
 ---
 
@@ -129,57 +246,69 @@ end tell
 
 ---
 
-## Task 1: Create Skill Directory Structure
+## Task 1: Create Skill Directory Structure (Standardized)
 
 **Files:**
-- Create: `skills/email/skill.md`
+- Create: `skills/email/SKILL.md` (with frontmatter)
 - Create: `skills/email/config.json`
+- Create: `skills/email/lib/` directory
+- Create: `skills/email/reference/` directory
+- Create: `skills/email/scripts/` directory
+- Create: `skills/email/tests/` directory
+- Create: `.claude/commands/email.md`
 
-**Step 1: Create skill directory**
+**Step 1: Create skill directory structure**
 
 ```bash
-mkdir -p skills/email
+mkdir -p skills/email/lib
+mkdir -p skills/email/reference
+mkdir -p skills/email/scripts
+mkdir -p skills/email/tests
+mkdir -p .claude/commands
 ```
 
-**Step 2: Create config.json**
+**Step 2: Create SKILL.md with frontmatter**
 
-```json
-{
-  "account": "iCloud",
-  "email": "brokkrassist@icloud.com",
-  "batch_size": 50,
-  "auto_triage": false,
-  "urgent_senders": [],
-  "urgent_keywords": ["urgent", "asap", "emergency", "critical"]
-}
+```yaml
+---
+name: email
+description: Apple Mail integration for reading, composing, and managing emails. Use for email triage, responses, and organization.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# Apple Mail Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
+## Capabilities
+
+- Read inbox and specific messages
+- Compose and send new emails
+- Reply to messages (with reply-all option)
+- Delete messages (move to trash)
+- Search by sender, subject, or content
+- Flag/unflag messages
+- Move messages between folders
+- Auto-triage based on urgency keywords
+- Save attachments to iCloud
+
+## Usage
+
+### Via Command (Manual)
+```
+/email
+/email read <id>
+/email compose <to> <subject>
+/email reply <id>
+/email search <query>
+/email flag <id>
+/email folders
+/email triage
 ```
 
-**Step 3: Create skill.md**
-
-```markdown
-# Apple Mail Integration Skill
-
-## Overview
-
-Native Apple Mail integration using AppleScript for reading, composing, and managing emails.
-
-## Account
-
-- **Email:** brokkrassist@icloud.com
-- **Account Name:** iCloud
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `/email` | Show inbox summary (unread count, recent messages) |
-| `/email read <id>` | Read specific message by ID |
-| `/email compose <to> <subject>` | Compose new email |
-| `/email reply <id>` | Reply to message |
-| `/email delete <id>` | Delete message |
-| `/email search <query>` | Search messages |
-| `/email flag <id>` | Flag/unflag message |
-| `/email folders` | List all mailboxes |
+### Via Notification (Automatic)
+Triggered by notification monitor when criteria met.
 
 ## Configuration
 
@@ -191,63 +320,90 @@ Edit `skills/email/config.json` to customize:
 - `urgent_senders`: List of senders to always flag as urgent
 - `urgent_keywords`: Keywords in subject/body that indicate urgency
 
-## Scripts
+## Known Limitations
 
-| Script | Purpose |
-|--------|---------|
-| `list-inbox.scpt` | List recent inbox messages |
-| `read-message.scpt` | Get full message content |
-| `compose.scpt` | Create and send new email |
-| `reply.scpt` | Reply to a message |
-| `delete.scpt` | Move message to trash |
-| `search.scpt` | Search by sender/subject/content |
-| `flag.scpt` | Toggle message flag |
-| `list-folders.scpt` | List all mailboxes |
-| `move-to-folder.scpt` | Move message to folder |
-| `mark-read.scpt` | Mark message as read |
+1. **HTML Email Composition BROKEN** - `html content` property non-functional since macOS El Capitan (2015)
+2. **Message ID Volatility** - IDs change when messages are moved between mailboxes
+3. **Forward Command Bug** - Using `forward` may duplicate original message; use manual copy workaround
 
-## Error Handling
+## Reference Documentation
 
-- If Mail.app not running: Script will launch it (may take 2-3 seconds)
-- If account not found: Returns error with available accounts
-- If message not found: Returns "Message not found" error
-- If send fails: Returns Mail.app error message
-
-## Examples
-
-```
-/email
-> Inbox: 5 unread of 127 total
-> Recent:
-> 1. [UNREAD] Amazon - Your order shipped (2 min ago)
-> 2. GitHub - PR merged: fix-bug-123 (1 hour ago)
-> 3. [FLAGGED] Mom - Call me when you can (yesterday)
-
-/email read 1
-> From: ship-confirm@amazon.com
-> Date: Feb 1, 2026 10:30 AM
-> Subject: Your order shipped
->
-> Your order #123-456 has shipped...
-
-/email compose tommy@example.com "Weekly Update"
-> Composing email to tommy@example.com
-> Subject: Weekly Update
-> Enter message body (or say "draft" to save as draft):
-
-/email search "invoice"
-> Found 3 messages:
-> 1. Vendor A - Invoice #001 (Jan 15)
-> 2. Vendor B - Invoice attached (Jan 10)
-> 3. Vendor A - Invoice #002 (Dec 20)
-```
+See `reference/` directory for detailed docs:
+- `applescript-mail.md` - AppleScript patterns and limitations
 ```
 
-**Step 4: Commit**
+**Step 3: Create config.json**
+
+```json
+{
+  "account": "iCloud",
+  "email": "brokkrassist@icloud.com",
+  "batch_size": 50,
+  "auto_triage": false,
+  "urgent_senders": [],
+  "urgent_keywords": ["urgent", "asap", "emergency", "critical", "time-sensitive", "action required"],
+  "timeout_seconds": 600,
+  "icloud_attachments_path": "Attachments"
+}
+```
+
+**Step 4: Create command file**
+
+Create `.claude/commands/email.md`:
+
+```yaml
+---
+name: email
+description: Read, compose, and manage email via Apple Mail
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the email skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+**Step 5: Create reference documentation**
+
+Create `skills/email/reference/applescript-mail.md`:
+
+```markdown
+# Apple Mail AppleScript Reference
+
+## Official Documentation Sources
+
+- [Mac Automation Scripting Guide](https://developer.apple.com/library/archive/documentation/LanguagesUtilities/Conceptual/MacAutomationScriptingGuide/)
+- [Mail Rules with AppleScript](https://support.apple.com/guide/mail/use-scripts-as-rule-actions-mlhlp1171/mac)
+- [AppleScript Mail Introduction - MacTech](http://preserve.mactech.com/articles/mactech/Vol.21/21.09/ScriptingMail/index.html)
+
+## Key Limitations
+
+1. **HTML Email Composition BROKEN** - `html content` property non-functional since macOS El Capitan (2015)
+2. **Message ID Volatility** - IDs change when messages are moved between mailboxes
+3. **Forward Command Bug** - Using `forward` may duplicate original message
+
+## Recommended Timeout Wrapper
+
+```applescript
+with timeout of 600 seconds
+    -- Long-running operations (read large message, search)
+end timeout
+```
+
+## Memory Considerations (8GB RAM)
+
+- Fetch messages in batches (max 50 at a time)
+- Don't load full message content until requested
+- Release references after processing
+```
+
+**Step 6: Commit**
 
 ```bash
-git add skills/email/skill.md skills/email/config.json
-git commit -m "feat(email): create email skill structure"
+git add skills/email/ .claude/commands/email.md
+git commit -m "feat(email): create standardized email skill structure"
 ```
 
 ---
@@ -1661,90 +1817,49 @@ git commit -m "feat(email): add EmailHandler module"
 
 ---
 
-## Task 11: Register Email Command
+## Task 11: Register Email Command (Standardized)
 
 **Files:**
-- Create: `.brokkr/commands/email/command.json`
-- Modify: `lib/message-parser.js` (if needed for subcommand parsing)
+- Verify: `.claude/commands/email.md` (created in Task 1)
 
-**Step 1: Create command directory**
+**Step 1: Verify command file exists**
 
-```bash
-mkdir -p .brokkr/commands/email
-```
-
-**Step 2: Create command.json**
-
-```json
-{
-  "name": "email",
-  "description": "Read, compose, and manage email via Apple Mail",
-  "aliases": ["mail", "e"],
-  "category": "skills",
-  "priority": "CRITICAL",
-  "source": "both",
-  "arguments": {
-    "required": [],
-    "optional": ["action", "args"],
-    "hint": "[read|compose|reply|delete|search|flag|folders] [args]"
-  },
-  "handler": {
-    "type": "skill",
-    "skill": "email"
-  },
-  "session": {
-    "create": true,
-    "codeLength": 2
-  }
-}
-```
-
-**Step 3: Validate command**
-
-Run:
-```bash
-node --input-type=module -e "
-import { validateCommand } from './lib/command-schema.js';
-import { readFileSync } from 'fs';
-const def = JSON.parse(readFileSync('./.brokkr/commands/email/command.json'));
-const result = validateCommand(def);
-if (!result.valid) {
-  console.error('Validation failed:', result.errors);
-  process.exit(1);
-}
-console.log('Validation passed!');
-"
-```
-
-Expected: "Validation passed!"
-
-**Step 4: Test registration**
-
-Run:
-```bash
-node --input-type=module -e "
-import { CommandRegistry } from './lib/command-registry.js';
-const registry = new CommandRegistry();
-registry.discover();
-const cmd = registry.get('email');
-if (cmd) {
-  console.log('Command registered:', cmd.name);
-  console.log('Description:', cmd.description);
-  console.log('Aliases:', cmd.aliases);
-} else {
-  console.error('Registration failed!');
-  process.exit(1);
-}
-"
-```
-
-Expected: Command details printed
-
-**Step 5: Commit**
+The command file was created in Task 1 at `.claude/commands/email.md`. Verify it exists:
 
 ```bash
-git add .brokkr/commands/email/command.json
-git commit -m "feat(email): register /email command"
+cat .claude/commands/email.md
+```
+
+Expected output:
+```yaml
+---
+name: email
+description: Read, compose, and manage email via Apple Mail
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the email skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+**Step 2: Test command invocation**
+
+```bash
+node dry-run-test.js "/email"
+node dry-run-test.js "/email read 123"
+node dry-run-test.js "/email compose test@example.com \"Test Subject\""
+```
+
+Expected: Commands parsed correctly with skill handler
+
+**Step 3: Commit (if not already committed)**
+
+```bash
+git add .claude/commands/email.md
+git commit -m "feat(email): register /email command via Claude commands"
 ```
 
 ---

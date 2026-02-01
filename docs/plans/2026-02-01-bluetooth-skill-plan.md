@@ -1,14 +1,17 @@
 # Bluetooth Control Skill Implementation Plan
 
+> **Architecture Reference:** This plan follows the standardized patterns defined in
+> `docs/concepts/2026-02-01-apple-integration-architecture.md`
+
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
 
 **Goal:** Create a self-contained Bluetooth skill that controls Bluetooth power, manages device connections, and automatically researches new devices to discover their capabilities and control scripts.
 
-**Architecture:** Self-contained skill in `skills/bluetooth/` using blueutil CLI. Includes device reference system that deploys subagents to research newly paired devices, discovers functionality, and saves control scripts. Each device gets a reference directory with capabilities documentation and custom scripts.
+**Architecture:** Self-contained skill in `skills/bluetooth/` using blueutil CLI. Includes device reference system that deploys subagents to research newly paired devices, discovers functionality, and saves control scripts. Each device gets a reference directory with capabilities documentation and custom scripts. Follows the standardized Apple Integration skill structure.
 
-**Tech Stack:** blueutil CLI (via Homebrew), Node.js (child_process), no additional npm dependencies
+**Tech Stack:** blueutil CLI (via Homebrew), Node.js (child_process), lib/icloud-storage.js for large file storage
 
 ---
 
@@ -16,36 +19,104 @@
 
 ```
 skills/bluetooth/
-  skill.md                      # Main skill documentation and agent instructions
-  config.json                   # Skill configuration (blueutil path, timeouts, etc.)
+├── SKILL.md                    # Main instructions (standard header)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── bluetooth.js            # Core blueutil wrapper functions
+│   ├── device-manager.js       # Device reference and discovery management
+│   └── helpers.js              # Skill-specific helpers
+├── devices/                    # Auto-generated device reference directories
+│   ├── .gitkeep
+│   └── <device-name>/          # Per-device (e.g., "airpods-pro/")
+│       ├── reference.md        # Device capabilities and research findings
+│       ├── metadata.json       # Device info (address, type, last seen)
+│       └── scripts/            # Device-specific control scripts
+│           ├── connect.sh
+│           ├── disconnect.sh
+│           └── <custom>.sh     # Discovered functionality scripts
+├── reference/                  # Documentation, research
+│   ├── blueutil-commands.md    # All blueutil commands and options
+│   ├── applescript-bluetooth.md # AppleScript IOBluetooth bridge examples
+│   └── device-types.md         # Known device type capabilities
+├── scripts/                    # Reusable automation scripts
+│   ├── check-installation.sh   # Verify blueutil is installed
+│   └── list-devices.sh         # Quick device listing script
+└── tests/
+    ├── bluetooth.test.js
+    └── device-manager.test.js
+```
 
-  lib/
-    blueutil.js                 # Core blueutil wrapper functions
-    device-manager.js           # Device reference and discovery management
-    device-researcher.js        # Subagent prompts for device research
+## Command File
 
-  scripts/
-    check-installation.sh       # Verify blueutil is installed
-    list-devices.sh             # Quick device listing script
+**Location:** `.claude/commands/bluetooth.md`
 
-  devices/                      # Auto-generated device reference directories
-    .gitkeep                    # Keep directory in git
-    <device-name>/              # Created per-device (e.g., "airpods-pro/")
-      reference.md              # Device capabilities and research findings
-      metadata.json             # Device info (address, type, last seen, etc.)
-      scripts/                  # Device-specific control scripts
-        connect.sh
-        disconnect.sh
-        <custom-scripts>.sh     # Discovered functionality scripts
+```yaml
+---
+name: bluetooth
+description: Control Bluetooth power and manage device connections
+argument-hint: [action] [device-name]
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
 
-  research/                     # Research reference materials
-    blueutil-commands.md        # All blueutil commands and options
-    applescript-bluetooth.md    # AppleScript IOBluetooth bridge examples
-    device-types.md             # Known device type capabilities
+Load the Bluetooth skill and process: $ARGUMENTS
 
-  tests/
-    blueutil.test.js
-    device-manager.test.js
+Available actions:
+- power on/off/toggle
+- list (paired/connected devices)
+- connect <device-name>
+- disconnect <device-name>
+- status <device-name>
+- research <device-name> (deploy device-researcher subagent)
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## Subagent Definition
+
+**Location:** `.claude/agents/device-researcher.md`
+
+```yaml
+---
+name: device-researcher
+description: Research newly connected Bluetooth devices to discover capabilities
+tools: Read, Write, Edit, Bash, Grep, Glob, WebSearch, WebFetch
+model: sonnet
+permissionMode: dontAsk
+---
+
+You are a Bluetooth device researcher. Given a device, research its capabilities and create documentation.
+
+Device to research: $ARGUMENTS
+
+## Research Tasks
+
+1. **Identify Device Type:** What category? (audio, input, IoT, etc.)
+2. **Bluetooth Profiles:** A2DP? HID? SPP? GATT?
+3. **Manufacturer Tools:** Does manufacturer provide macOS software?
+4. **System Information:** What does `system_profiler SPBluetoothDataType` show?
+5. **AppleScript Access:** Can IOBluetooth framework access device services?
+6. **Battery Monitoring:** Can we read battery level?
+7. **Custom Commands:** Any device-specific control commands?
+
+## Output
+
+Create files in `skills/bluetooth/devices/<normalized-device-name>/`:
+- reference.md - Device documentation
+- metadata.json - Device metadata
+- scripts/connect.sh, disconnect.sh, status.sh
+- Any device-specific control scripts discovered
+```
+
+## iCloud Storage Integration
+
+Use `lib/icloud-storage.js` for storing device research outputs and large files:
+
+```javascript
+import { getPath } from '../../lib/icloud-storage.js';
+
+// Store device research in iCloud
+const researchPath = getPath('research', `bluetooth-${deviceName}-research.md`);
 ```
 
 ---
@@ -1832,17 +1903,52 @@ git commit -m "feat(bluetooth): add device researcher module with subagent promp
 
 ## Task 5: Skill Documentation
 
-**Objective:** Create comprehensive skill.md with agent instructions.
+**Objective:** Create comprehensive SKILL.md with agent instructions following the standard header format.
 
 **Files:**
-- Create: `/Users/brokkrbot/brokkr-agent/skills/bluetooth/skill.md`
+- Create: `/Users/brokkrbot/brokkr-agent/skills/bluetooth/SKILL.md`
 
 ### Implementation
+
+```yaml
+---
+name: bluetooth
+description: Control Bluetooth power, manage device connections, and automatically research new devices
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+```
 
 ```markdown
 # Bluetooth Control Skill
 
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
 Control Bluetooth power, manage device connections, and automatically research new devices.
+
+## Capabilities
+
+- Turn Bluetooth on/off/toggle
+- List paired and connected devices
+- Connect/disconnect specific devices
+- Check device connection status
+- Auto-research new devices via device-researcher subagent
+- Store device research in iCloud via lib/icloud-storage.js
+
+## Usage
+
+### Via Command (Manual)
+```
+/bluetooth power on
+/bluetooth list
+/bluetooth connect "AirPods Pro"
+/bluetooth disconnect "AirPods Pro"
+/bluetooth status "AirPods Pro"
+/bluetooth research "New Device"
+```
+
+### Via Notification (Automatic)
+Triggered by notification monitor when a new Bluetooth device connects.
 
 ## Quick Reference
 

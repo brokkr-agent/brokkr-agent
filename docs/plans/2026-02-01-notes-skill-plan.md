@@ -2,11 +2,86 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **Architecture Reference:** See `docs/concepts/2026-02-01-apple-integration-architecture.md` for standardized patterns.
+
 **Goal:** Add Notes.app integration skill for the Brokkr agent, enabling creating, reading, searching, and managing notes via AppleScript commands accessible through WhatsApp, iMessage, and webhooks.
 
-**Architecture:** Create a Notes skill with AppleScript-based sub-scripts for CRUD operations on notes and folders. Each operation is a standalone .scpt file that can be invoked by the Brokkr agent. Use Notes.app's native AppleScript dictionary for all operations. Scripts return structured JSON output for parsing by the agent. Notes use HTML formatting for rich text.
+**Architecture:** Create a Notes skill with AppleScript-based sub-scripts for CRUD operations on notes and folders. Each operation is a standalone .scpt file that can be invoked by the Brokkr agent. Use Notes.app's native AppleScript dictionary for all operations. Scripts return structured JSON output for parsing by the agent. Notes use HTML formatting for rich text. Follows standardized Apple Integration patterns for skill structure, commands, and notification processing.
 
-**Tech Stack:** AppleScript (osascript), Node.js (for invoking scripts), Notes.app AppleScript dictionary, HTML for note content formatting, JSON for data exchange
+**Tech Stack:** AppleScript (osascript), Node.js (for invoking scripts), Notes.app AppleScript dictionary, HTML for note content formatting, lib/icloud-storage.js for exports, JSON for data exchange
+
+---
+
+## Standardized Skill Structure
+
+```
+skills/notes/
+├── SKILL.md                    # Main instructions (see Task 11)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── notes.js                # Core functionality
+│   └── helpers.js              # Skill-specific helpers (HTML utilities)
+├── reference/                  # Documentation, research
+│   └── applescript-examples.md
+├── scripts/                    # Reusable AppleScript files
+│   ├── list-folders.scpt
+│   ├── list-notes.scpt
+│   ├── list-recent.scpt
+│   ├── create-note.scpt
+│   ├── find-note.scpt
+│   ├── read-note.scpt
+│   ├── append-note.scpt
+│   ├── modify-note.scpt
+│   ├── delete-note.scpt
+│   └── search-notes.scpt
+└── tests/
+    └── *.test.js
+```
+
+## Command File
+
+Create `.claude/commands/notes.md`:
+
+```yaml
+---
+name: notes
+description: Manage Notes.app - create, search, read, append, modify notes
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the notes skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## Notification Processing Criteria
+
+For the notification-processor subagent, Notes notifications should trigger agent when:
+
+| Criteria | Queue | Priority |
+|----------|-------|----------|
+| Shared note updated (collaboration) | Yes | NORMAL |
+| Note with "[AGENT]" in title modified | Yes | HIGH |
+| Note shared with brokkrassist@icloud.com | Yes | NORMAL |
+| @Brokkr mention in shared note | Yes | HIGH |
+| Personal note modification | No | - |
+| Note moved between folders | No | - |
+
+## iCloud Storage Integration
+
+Notes exports should use `lib/icloud-storage.js`:
+
+```javascript
+import { getPath } from '../../lib/icloud-storage.js';
+
+// Export notes data
+const exportPath = getPath('exports', `notes-export-${Date.now()}.json`);
+
+// Store research outputs
+const researchPath = getPath('research', `topic-research-${Date.now()}.md`);
+```
 
 ---
 
@@ -107,19 +182,30 @@ Per [Apple Support](https://support.apple.com/guide/notes/add-and-remove-folders
 
 ### Script Organization
 
+Uses standardized skill structure per `docs/concepts/2026-02-01-apple-integration-architecture.md`:
+
 ```
 skills/notes/
-  skill.md              # Usage documentation
-  list-folders.scpt     # List all folders
-  list-notes.scpt       # List all notes in folder
-  list-recent.scpt      # List recently modified notes
-  create-note.scpt      # Create new note
-  find-note.scpt        # Find note by ID or name
-  read-note.scpt        # Get full note content
-  append-note.scpt      # Add content to existing note
-  modify-note.scpt      # Update note properties
-  delete-note.scpt      # Delete note
-  search-notes.scpt     # Search notes by content
+├── SKILL.md                    # Main instructions with YAML frontmatter
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── notes.js                # Core functionality (moved from lib/notes.js)
+│   └── helpers.js              # Skill-specific helpers (HTML utilities)
+├── reference/
+│   └── applescript-examples.md # Documentation, research
+├── scripts/
+│   ├── list-folders.scpt       # List all folders
+│   ├── list-notes.scpt         # List all notes in folder
+│   ├── list-recent.scpt        # List recently modified notes
+│   ├── create-note.scpt        # Create new note
+│   ├── find-note.scpt          # Find note by ID or name
+│   ├── read-note.scpt          # Get full note content
+│   ├── append-note.scpt        # Add content to existing note
+│   ├── modify-note.scpt        # Update note properties
+│   ├── delete-note.scpt        # Delete note
+│   └── search-notes.scpt       # Search notes by content
+└── tests/
+    └── *.test.js
 ```
 
 ### JSON Output Format
@@ -2161,15 +2247,80 @@ git commit -m "feat(notes): add Node.js wrapper module for notes operations"
 
 ---
 
-## Task 11: Skill Documentation
+## Task 11: Skill Documentation (SKILL.md with Standard Header)
 
 **Files:**
-- Create: `skills/notes/skill.md`
+- Create: `skills/notes/SKILL.md`
+- Create: `skills/notes/config.json`
+- Create: `.claude/commands/notes.md`
 
-### Step 1: Write skill documentation
+### Step 1: Create config.json
+
+```json
+{
+  "name": "notes",
+  "version": "1.0.0",
+  "description": "Notes.app integration for Brokkr agent",
+  "scriptsDir": "scripts",
+  "notificationTriggers": {
+    "sharedNoteUpdate": {
+      "priority": "NORMAL"
+    },
+    "agentTaggedNote": {
+      "titlePattern": "[AGENT]",
+      "priority": "HIGH"
+    },
+    "noteSharedWithAgent": {
+      "shareEmail": "brokkrassist@icloud.com",
+      "priority": "NORMAL"
+    },
+    "mentionInNote": {
+      "mentionPattern": "@Brokkr",
+      "priority": "HIGH"
+    }
+  },
+  "icloudExport": {
+    "category": "exports",
+    "filePrefix": "notes-export"
+  },
+  "icloudResearch": {
+    "category": "research",
+    "filePrefix": "topic-research"
+  }
+}
+```
+
+### Step 2: Create command file
+
+Create `.claude/commands/notes.md`:
+
+```yaml
+---
+name: notes
+description: Manage Notes.app - create, search, read, append, modify notes
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the notes skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+### Step 3: Write skill documentation with standard header
 
 ```markdown
+---
+name: notes
+description: Manage macOS Notes.app - create, search, read, append, modify notes with HTML formatting
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
 # Notes Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
 
 Manage macOS Notes.app via AppleScript for the Brokkr agent.
 
@@ -2184,6 +2335,28 @@ Manage macOS Notes.app via AppleScript for the Brokkr agent.
 - Modify note properties
 - Delete notes
 - Search notes by keyword
+- Export notes data to iCloud storage
+- Store research outputs to iCloud Research folder
+
+## Usage
+
+### Via Command (Manual)
+```
+/notes list
+/notes create "Meeting Notes" "Discussed timeline\nNext steps: research"
+/notes search "project"
+/notes append <id> "Additional notes"
+```
+
+### Via Notification (Automatic)
+Triggered by notification monitor when:
+- Shared note updated (collaboration)
+- Note with "[AGENT]" in title modified
+- @Brokkr mention in shared note
+
+## Reference Documentation
+
+See `reference/` directory for detailed AppleScript examples.
 
 ## Prerequisites
 

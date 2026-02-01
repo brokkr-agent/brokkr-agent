@@ -3,12 +3,107 @@
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
+>
+> **Architecture Reference:** See `docs/concepts/2026-02-01-apple-integration-architecture.md` for standardized patterns.
 
 **Goal:** Add full Contacts.app integration to enable contact lookup, creation, modification, and group management via AppleScript commands. Support `/contact` commands from WhatsApp, iMessage, and webhooks.
 
 **Architecture:** Create reusable AppleScript modules in `skills/contacts/` for finding, creating, modifying, and managing contacts. Integrate with message parsers to support natural language commands. Return formatted contact information including all available properties (name, email, phone, address, organization, social profiles, dates, etc.).
 
 **Tech Stack:** AppleScript (Contacts.app scripting dictionary), Node.js (osascript execution), shared lib modules (command-registry.js, message-parser.js)
+
+---
+
+## Skill Directory Structure
+
+```
+skills/contacts/
+├── SKILL.md                    # Main instructions (standard header)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── contacts.js             # Core functionality
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   └── applescript-dictionary.md
+├── scripts/                    # Reusable automation scripts
+│   ├── find-contact.scpt
+│   ├── add-contact.scpt
+│   ├── update-contact.scpt
+│   ├── add-element.scpt
+│   ├── delete-contact.scpt
+│   ├── list-groups.scpt
+│   ├── manage-group.scpt
+│   └── export-vcard.scpt
+└── tests/
+    └── contacts.test.js
+```
+
+## Command File
+
+Create `.claude/commands/contacts.md`:
+
+```yaml
+---
+name: contacts
+description: Find and manage contacts in Contacts.app
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the Contacts skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## iCloud Storage Integration
+
+Use `lib/icloud-storage.js` for vCard exports:
+
+```javascript
+const { getPath } = require('../../lib/icloud-storage');
+
+// Export vCard to iCloud
+const vcardPath = getPath('exports', `${contactName}-${Date.now()}.vcf`);
+```
+
+## SKILL.md Standard Header
+
+```yaml
+---
+name: contacts
+description: Access and manage macOS Contacts.app via AppleScript. Find contacts, create entries, update info, manage groups, export vCards.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# Contacts Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
+## Capabilities
+
+- Find contacts by name, email, phone, organization
+- Create contacts with full properties
+- Update contact information
+- Manage contact groups
+- Export vCards to iCloud storage
+
+## Usage
+
+### Via Command (Manual)
+```
+/contacts find John Smith
+/contacts add Jane Doe email:jane@example.com
+```
+
+### Via Notification (Automatic)
+Not applicable - Contacts doesn't generate actionable notifications.
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs.
+```
 
 ---
 

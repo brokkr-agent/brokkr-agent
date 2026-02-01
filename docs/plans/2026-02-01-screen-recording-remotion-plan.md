@@ -1,14 +1,232 @@
 # Screen Recording & Remotion Tutorial Video System
 
+> **Architecture:** This plan follows [Apple Integration Architecture](../concepts/2026-02-01-apple-integration-architecture.md).
+
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
 
 **Goal:** Enable Brokkr to create polished tutorial videos for brokkr.co by combining macOS screen recording with Remotion post-processing for intros, annotations, and professional output.
 
-**Architecture:** Two-phase workflow: (1) Screen capture skill using native macOS `screencapture -v` for raw recording, (2) Remotion project for post-processing with React-based templates for intros, callouts, and transitions. Recordings stored in `recordings/` directory, Remotion project in `remotion-videos/`. Output shared via iCloud Family Sharing.
+**Architecture:** Two-phase workflow: (1) Screen capture skill using native macOS `screencapture -v` for raw recording, (2) Remotion project for post-processing with React-based templates for intros, callouts, and transitions. Recordings stored in iCloud, Remotion project in `remotion-videos/`. Output shared via iCloud Family Sharing.
 
 **Tech Stack:** macOS screencapture CLI, Node.js, Remotion framework (v4.0+), React, @remotion/transitions, iCloud Drive
+
+---
+
+## Standardized Skill Structure
+
+### Screen Capture Skill
+
+```
+skills/screen-capture/
+├── SKILL.md                    # Main instructions (with frontmatter)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── screen-capture.js       # Core functionality
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   └── screencapture-cli.md
+├── scripts/                    # Reusable automation scripts
+│   ├── record.sh
+│   ├── stop.sh
+│   ├── list-windows.sh
+│   ├── list-recordings.sh
+│   └── list-audio-sources.sh
+└── tests/
+    └── screen-capture.test.js
+```
+
+### Video Creation Skill
+
+```
+skills/video-creation/
+├── SKILL.md                    # Main instructions (with frontmatter)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── video-creation.js       # Core functionality
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   └── remotion-patterns.md
+├── scripts/                    # Reusable automation scripts
+│   ├── render.js
+│   ├── preview.sh
+│   ├── share.sh
+│   └── create-tutorial.sh
+└── tests/
+    └── video-creation.test.js
+```
+
+## Command Files
+
+### Screen Capture Command
+
+**Location:** `.claude/commands/record.md`
+
+```yaml
+---
+name: record
+description: Start or stop screen recording using macOS screencapture
+argument-hint: [stop|window|region] [--duration <seconds>]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the screen-capture skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+### Video Creation Command
+
+**Location:** `.claude/commands/video.md`
+
+```yaml
+---
+name: video
+description: Create and manage tutorial videos using Remotion
+argument-hint: <create|render|preview|share|list> [recording] [--title "Title"]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the video-creation skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## SKILL.md Standard Headers
+
+### Screen Capture SKILL.md
+
+```yaml
+---
+name: screen-capture
+description: Screen recording using macOS native screencapture. Use for capturing tutorials, demos, and screen content.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# Screen Capture Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
+## Capabilities
+
+- Full-screen recording
+- Window-specific recording
+- Region selection recording
+- Timed recordings
+- Cursor capture option
+- Audio source selection
+
+## Usage
+
+### Via Command (Manual)
+```
+/record
+/record stop
+/record window
+/record --duration 30
+```
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs.
+```
+
+### Video Creation SKILL.md
+
+```yaml
+---
+name: video-creation
+description: Create polished tutorial videos from recordings using Remotion. Use for producing brokkr.co content.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# Video Creation Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
+## Capabilities
+
+- Add intro/outro sequences
+- Apply callout annotations
+- Render with Remotion
+- Share via iCloud Family Sharing
+
+## Usage
+
+### Via Command (Manual)
+```
+/video create "Tutorial Title"
+/video render recording.mov --title "Title"
+/video preview
+/video share video.mp4
+```
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs.
+```
+
+## iCloud Storage Integration
+
+All recordings and rendered videos stored using `lib/icloud-storage.js`:
+
+```javascript
+// Recordings → iCloud
+const { getPath } = require('../../lib/icloud-storage.js');
+const recordingPath = getPath('recordings', `recording-${timestamp}.mov`);
+// → ~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Recordings/YYYY-MM-DD/recording-*.mov
+
+// Exports → iCloud
+const exportPath = getPath('exports', `tutorial-${title}.mp4`);
+// → ~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Exports/YYYY-MM-DD/tutorial-*.mp4
+```
+
+## Custom Subagent: Content Analyzer
+
+**Location:** `.claude/agents/content-analyzer.md`
+
+```yaml
+---
+name: content-analyzer
+description: Analyze video content to generate chapter markers and descriptions
+tools: Read, Grep
+model: haiku
+permissionMode: dontAsk
+---
+
+You are a content analyzer for tutorial videos. Analyze the video/recording and:
+
+1. Identify key sections and transitions
+2. Generate chapter markers with timestamps
+3. Create brief descriptions for each section
+4. Suggest callout placements
+
+Video data: $ARGUMENTS
+
+Output JSON:
+{
+  "chapters": [
+    {"timestamp": "0:00", "title": "Introduction", "description": "..."},
+    {"timestamp": "0:30", "title": "Setup", "description": "..."}
+  ],
+  "callouts": [
+    {"timestamp": "0:15", "text": "Click here", "x": 50, "y": 30}
+  ]
+}
+```
+
+## Notification Processing Criteria
+
+| Criteria | Queue If | Drop If |
+|----------|----------|---------|
+| Recording | Recording completed successfully | Recording failed/cancelled |
+| Rendering | Render completed | Render in progress |
+| Sharing | Upload to iCloud complete | Already shared |
 
 ---
 
@@ -72,64 +290,166 @@ Research against official documentation confirms the two-phase workflow is corre
 
 ## Phase 1: Screen Capture Skill
 
-### Task 1.1: Create Screen Capture Skill Directory Structure
+### Task 1.1: Create Screen Capture Skill Directory Structure (Standardized)
 
 **Files:**
-- Create: `skills/screen-capture/skill.md`
-- Create: `skills/screen-capture/record.sh`
-- Create: `skills/screen-capture/stop.sh`
-- Create: `skills/screen-capture/list-windows.sh`
-- Create: `recordings/` directory
+- Create: `skills/screen-capture/SKILL.md` (with frontmatter)
+- Create: `skills/screen-capture/config.json`
+- Create: `skills/screen-capture/lib/` directory
+- Create: `skills/screen-capture/reference/` directory
+- Create: `skills/screen-capture/scripts/` directory
+- Create: `skills/screen-capture/tests/` directory
+- Create: `.claude/commands/record.md`
 
 **Step 1: Create directory structure**
 
 ```bash
-mkdir -p /Users/brokkrbot/brokkr-agent/skills/screen-capture
-mkdir -p /Users/brokkrbot/brokkr-agent/recordings
+mkdir -p skills/screen-capture/lib
+mkdir -p skills/screen-capture/reference
+mkdir -p skills/screen-capture/scripts
+mkdir -p skills/screen-capture/tests
+mkdir -p .claude/commands
 ```
 
-**Step 2: Create skill.md**
+**Step 2: Create SKILL.md with frontmatter**
 
-```markdown
+```yaml
+---
+name: screen-capture
+description: Screen recording using macOS native screencapture. Use for capturing tutorials, demos, and screen content.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
 # Screen Capture Skill
 
-Record screen video using macOS native screencapture command.
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
 
-## Commands
+## Capabilities
 
-| Command | Description |
-|---------|-------------|
-| `/record` | Start full-screen recording |
-| `/record window` | Start recording specific window |
-| `/record region` | Start recording screen region |
-| `/record stop` | Stop current recording |
-| `/recordings` | List available recordings |
+- Full-screen recording
+- Window-specific recording
+- Region selection recording
+- Timed recordings with `-V <seconds>`
+- Cursor capture with `-C` flag
+- Audio source selection with `-G`
 
-## Recording Storage
+## Usage
 
-All recordings saved to: `recordings/`
-
-Naming convention: `recording-YYYY-MM-DD-HHmmss.mov`
-
-## Usage Notes
-
-- Only one recording can be active at a time
-- Recording continues until `/record stop` or system limit
-- Use `-V <seconds>` for timed recordings
-- Window recording requires window ID (use list-windows.sh)
-
-## Scripts
-
-- `record.sh` - Start recording
-- `stop.sh` - Stop recording
-- `list-windows.sh` - List windows with IDs
+### Via Command (Manual)
+```
+/record                  # Start full-screen recording
+/record window           # Record specific window
+/record region           # Record screen region
+/record stop             # Stop current recording
+/record --duration 30    # Record for 30 seconds
+/recordings              # List available recordings
 ```
 
-**Step 3: Commit**
+## Configuration
+
+Edit `skills/screen-capture/config.json`:
+
+```json
+{
+  "recordings_dir": "~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Recordings",
+  "default_format": "mov",
+  "capture_cursor": true,
+  "suppress_sounds": true
+}
+```
+
+## Permission Requirements
+
+1. **Screen Recording** (required):
+   - System Settings → Privacy & Security → Privacy → Screen Recording
+   - Add Terminal.app
+
+2. **Automation** (for window ID retrieval):
+   - Allow Terminal to control target applications
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs:
+- `screencapture-cli.md` - CLI options and patterns
+```
+
+**Step 3: Create config.json**
+
+```json
+{
+  "recordings_dir": "~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Recordings",
+  "default_format": "mov",
+  "capture_cursor": true,
+  "suppress_sounds": true,
+  "default_display": 1
+}
+```
+
+**Step 4: Create command file**
+
+Create `.claude/commands/record.md`:
+
+```yaml
+---
+name: record
+description: Start or stop screen recording using macOS screencapture
+argument-hint: [stop|window|region] [--duration <seconds>]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the screen-capture skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+**Step 5: Create reference documentation**
+
+Create `skills/screen-capture/reference/screencapture-cli.md`:
+
+```markdown
+# screencapture CLI Reference
+
+## Official Documentation Sources
+
+- [screencapture Man Page - SS64](https://ss64.com/mac/screencapture.html)
+- [macOS screencapture Documentation](https://ss64.com/mac/screencapture.html)
+
+## Key Flags
+
+| Flag | Description |
+|------|-------------|
+| `-v` | Capture video (continuous) |
+| `-V <seconds>` | Capture video for duration |
+| `-C` | Capture cursor |
+| `-x` | Suppress screenshot sounds |
+| `-l <windowid>` | Capture specific window |
+| `-R <x,y,w,h>` | Capture specific region |
+| `-D <display>` | Capture specific display |
+| `-G <audioid>` | Include audio source |
+| `-T <seconds>` | Delay before capture |
+
+## Audio Source Discovery
 
 ```bash
-git add skills/screen-capture/skill.md
-git commit -m "feat(screen-capture): add skill definition"
+# List audio sources
+osascript -e 'tell application "System Events" to get name of every audio source'
+```
+
+## Window ID Discovery
+
+```bash
+# Get window IDs via AppleScript
+osascript -e 'tell application "System Events" to get id of every window of every process'
+```
+```
+
+**Step 6: Commit**
+
+```bash
+git add skills/screen-capture/ .claude/commands/record.md
+git commit -m "feat(screen-capture): create standardized skill structure"
 ```
 
 ---
@@ -992,50 +1312,203 @@ git commit -m "feat(remotion): add Outro component with CTA"
 
 ---
 
-### Task 2.5: Create Video Rendering Script
+### Task 2.5: Create Video Creation Skill Structure (Standardized)
 
 **Files:**
-- Create: `skills/video-creation/render.js`
-- Create: `skills/video-creation/skill.md`
+- Create: `skills/video-creation/SKILL.md` (with frontmatter)
+- Create: `skills/video-creation/config.json`
+- Create: `skills/video-creation/lib/` directory
+- Create: `skills/video-creation/reference/` directory
+- Create: `skills/video-creation/scripts/` directory
+- Create: `skills/video-creation/tests/` directory
+- Create: `.claude/commands/video.md`
+- Create: `.claude/agents/content-analyzer.md`
 
-**Step 1: Create skill directory and skill.md**
+**Step 1: Create skill directory structure**
 
 ```bash
-mkdir -p /Users/brokkrbot/brokkr-agent/skills/video-creation
+mkdir -p skills/video-creation/lib
+mkdir -p skills/video-creation/reference
+mkdir -p skills/video-creation/scripts
+mkdir -p skills/video-creation/tests
+mkdir -p .claude/commands
+mkdir -p .claude/agents
 ```
 
-```markdown
+**Step 2: Create SKILL.md with frontmatter**
+
+```yaml
+---
+name: video-creation
+description: Create polished tutorial videos from recordings using Remotion. Use for producing brokkr.co content.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
 # Video Creation Skill
 
-Create polished tutorial videos from screen recordings using Remotion.
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
 
-## Commands
+## Capabilities
 
-| Command | Description |
-|---------|-------------|
-| `/video create <topic>` | Create tutorial video on topic |
-| `/video render <recording>` | Process recording into video |
-| `/video preview` | Open Remotion Studio |
-| `/video list` | List available videos |
+- Add intro/outro sequences with branding
+- Apply callout annotations at specific timestamps
+- Render high-quality video with Remotion
+- Share via iCloud Family Sharing
 
-## Workflow
+## Usage
 
-1. Record screen using `/record` command
-2. Create video using `/video render <recording>`
-3. Rendered video saved to `videos/` directory
-4. Share via iCloud Family Sharing
+### Via Command (Manual)
+```
+/video create "Tutorial Title"    # Full workflow
+/video render recording.mov       # Render with Remotion
+/video preview                    # Open Remotion Studio
+/video share video.mp4            # Share via iCloud
+/video list                       # List available videos
+```
+
+## Configuration
+
+Edit `skills/video-creation/config.json`:
+
+```json
+{
+  "exports_dir": "~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Exports",
+  "remotion_concurrency": 2,
+  "default_resolution": "1080p",
+  "intro_duration_frames": 90,
+  "outro_duration_frames": 120
+}
+```
 
 ## Templates
 
 - **TutorialVideo** - Standard tutorial with intro/outro
 - **QuickDemo** - Shorter format, minimal intro
 
-## Memory Notes
+## Memory Notes (8GB RAM)
 
-Remotion rendering is memory-intensive. On 8GB RAM systems:
-- Close Chrome and other apps before rendering
-- Use 720p for longer videos if needed
-- Render serially (one at a time)
+- Default Remotion cache: ~4GB (50% of system RAM)
+- Optimal concurrency: 2 (benchmark to confirm)
+- Pre-render cleanup: Kill Chrome, Safari before rendering
+- Resolution strategy: 1080p for most, 720p for videos >10 minutes
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs:
+- `remotion-patterns.md` - Remotion best practices
+```
+
+**Step 3: Create config.json**
+
+```json
+{
+  "exports_dir": "~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Exports",
+  "icloud_shared_dir": "~/Library/Mobile Documents/com~apple~CloudDocs/Family/Brokkr-Videos",
+  "remotion_concurrency": 2,
+  "default_resolution": "1080p",
+  "default_fps": 30,
+  "intro_duration_frames": 90,
+  "outro_duration_frames": 120,
+  "crf_quality": {
+    "high": 18,
+    "medium": 23,
+    "low": 28
+  }
+}
+```
+
+**Step 4: Create command file**
+
+Create `.claude/commands/video.md`:
+
+```yaml
+---
+name: video
+description: Create and manage tutorial videos using Remotion
+argument-hint: <create|render|preview|share|list> [recording] [--title "Title"]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the video-creation skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+**Step 5: Create content-analyzer subagent**
+
+Create `.claude/agents/content-analyzer.md`:
+
+```yaml
+---
+name: content-analyzer
+description: Analyze video content to generate chapter markers and descriptions
+tools: Read, Grep
+model: haiku
+permissionMode: dontAsk
+---
+
+You are a content analyzer for tutorial videos. Analyze the video/recording and:
+
+1. Identify key sections and transitions
+2. Generate chapter markers with timestamps
+3. Create brief descriptions for each section
+4. Suggest callout placements
+
+Video data: $ARGUMENTS
+
+Output JSON:
+{
+  "chapters": [
+    {"timestamp": "0:00", "title": "Introduction", "description": "..."},
+    {"timestamp": "0:30", "title": "Setup", "description": "..."}
+  ],
+  "callouts": [
+    {"timestamp": "0:15", "text": "Click here", "x": 50, "y": 30}
+  ]
+}
+```
+
+**Step 6: Create reference documentation**
+
+Create `skills/video-creation/reference/remotion-patterns.md`:
+
+```markdown
+# Remotion Patterns Reference
+
+## Official Documentation Sources
+
+- [Remotion Official Documentation](https://www.remotion.dev/docs/)
+- [Remotion CLI Render](https://www.remotion.dev/docs/cli/render)
+- [Remotion Performance Guide](https://www.remotion.dev/docs/performance)
+- [Remotion Transitions](https://www.remotion.dev/docs/transitions/transitionseries)
+
+## Memory Optimization for 8GB RAM
+
+- Default Remotion cache: ~4GB (50% of system RAM)
+- Optimal concurrency: 2 (use `npx remotion benchmark` to confirm)
+- Pre-render cleanup: Kill Chrome, Safari before rendering
+- Resolution strategy: 1080p for most, 720p for videos >10 minutes
+
+## Quality Presets
+
+| Preset | CRF Value | Use Case |
+|--------|-----------|----------|
+| high | 18 | Final production |
+| medium | 23 | Preview/draft |
+| low | 28 | Quick test |
+
+## Progress Indicators
+
+Use `--log=verbose` for detailed rendering progress.
+```
+
+**Step 7: Commit**
+
+```bash
+git add skills/video-creation/ .claude/commands/video.md .claude/agents/content-analyzer.md
+git commit -m "feat(video-creation): create standardized skill structure"
 ```
 
 **Step 2: Create render.js**
@@ -1205,10 +1678,24 @@ git commit -m "feat(video-creation): add Remotion preview script"
 
 ## Phase 3: iCloud Sharing Integration
 
+### iCloud Storage Paths (Standardized)
+
+Following the architecture patterns, all files use `lib/icloud-storage.js`:
+
+```javascript
+// Recordings stored in iCloud
+const recordingPath = getPath('recordings', `recording-${timestamp}.mov`);
+// → ~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Recordings/YYYY-MM-DD/
+
+// Rendered videos stored in iCloud Exports
+const exportPath = getPath('exports', `tutorial-${title}.mp4`);
+// → ~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Exports/YYYY-MM-DD/
+```
+
 ### Task 3.1: Create Video Sharing Script
 
 **Files:**
-- Create: `skills/video-creation/share.sh`
+- Create: `skills/video-creation/scripts/share.sh`
 
 **Step 1: Create the script**
 
@@ -1273,49 +1760,54 @@ git commit -m "feat(video-creation): add iCloud sharing script"
 
 ---
 
-### Task 3.2: Register Video Commands
+### Task 3.2: Register Video Commands (Standardized)
 
 **Files:**
-- Modify: `lib/builtin-commands.js`
+- Verify: `.claude/commands/video.md` (created in Task 2.5)
+- Verify: `.claude/commands/record.md` (created in Task 1.1)
 
-**Step 1: Add video commands**
+**Step 1: Verify command files exist**
 
-Add to `lib/builtin-commands.js`:
+The command files were created in earlier tasks. Verify they exist:
 
-```javascript
-// Video Creation Commands
-CommandFactory.skill({
-  name: 'video',
-  description: 'Create and manage tutorial videos',
-  aliases: ['vid'],
-  skill: 'video-creation',
-  arguments: {
-    required: ['action'],
-    optional: ['target', 'options'],
-    hint: '<create|render|preview|share|list> [recording] [--title "Title"]'
-  },
-  examples: [
-    '/video create "How to create a task" - Full workflow',
-    '/video render recording-2026-02-01.mov --title "Getting Started"',
-    '/video preview - Open Remotion Studio',
-    '/video share tutorial-video.mp4 - Share via iCloud',
-    '/video list - List available videos'
-  ]
-})
+```bash
+cat .claude/commands/video.md
+cat .claude/commands/record.md
 ```
 
 **Step 2: Test command parsing**
 
 ```bash
+node dry-run-test.js "/record"
+node dry-run-test.js "/record stop"
 node dry-run-test.js "/video create \"How to use brokkr\""
 node dry-run-test.js "/video render recording.mov"
 ```
 
-**Step 3: Commit**
+Expected: Commands parsed correctly with skill handler
+
+**Step 3: Create recordings command**
+
+Create `.claude/commands/recordings.md`:
+
+```yaml
+---
+name: recordings
+description: List available screen recordings
+argument-hint: [--json]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+List all available screen recordings from iCloud storage.
+
+Format: $ARGUMENTS
+```
+
+**Step 4: Commit**
 
 ```bash
-git add lib/builtin-commands.js
-git commit -m "feat(video-creation): register video commands"
+git add .claude/commands/
+git commit -m "feat(video-creation): register video and recording commands"
 ```
 
 ---

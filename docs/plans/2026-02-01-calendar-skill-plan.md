@@ -2,11 +2,84 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **Architecture Reference:** See `docs/concepts/2026-02-01-apple-integration-architecture.md` for standardized patterns.
+
 **Goal:** Add Calendar.app integration skill for the Brokkr agent, enabling reading, creating, modifying, and managing calendar events via AppleScript commands accessible through WhatsApp, iMessage, and webhooks.
 
-**Architecture:** Create a Calendar skill with AppleScript-based sub-scripts for CRUD operations on events and calendars. Each operation is a standalone .scpt file that can be invoked by the Brokkr agent. Use Calendar.app's native AppleScript dictionary for all operations. Scripts return structured JSON output for parsing by the agent.
+**Architecture:** Create a Calendar skill with AppleScript-based sub-scripts for CRUD operations on events and calendars. Each operation is a standalone .scpt file that can be invoked by the Brokkr agent. Use Calendar.app's native AppleScript dictionary for all operations. Scripts return structured JSON output for parsing by the agent. Follows standardized Apple Integration patterns for skill structure, commands, and notification processing.
 
-**Tech Stack:** AppleScript (osascript), Node.js (for invoking scripts), Calendar.app AppleScript dictionary, better-sqlite3 (optional for advanced queries), JSON for data exchange
+**Tech Stack:** AppleScript (osascript), Node.js (for invoking scripts), Calendar.app AppleScript dictionary, lib/icloud-storage.js for exports, JSON for data exchange
+
+---
+
+## Standardized Skill Structure
+
+```
+skills/calendar/
+├── SKILL.md                    # Main instructions (see Task 10)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── calendar.js             # Core functionality
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   └── applescript-examples.md
+├── scripts/                    # Reusable AppleScript files
+│   ├── list-calendars.scpt
+│   ├── list-today.scpt
+│   ├── list-week.scpt
+│   ├── list-events.scpt
+│   ├── create-event.scpt
+│   ├── find-event.scpt
+│   ├── modify-event.scpt
+│   ├── delete-event.scpt
+│   ├── check-conflicts.scpt
+│   └── add-alarm.scpt
+└── tests/
+    └── *.test.js
+```
+
+## Command File
+
+Create `.claude/commands/calendar.md`:
+
+```yaml
+---
+name: calendar
+description: Manage Calendar.app events - list, create, modify, delete events
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the calendar skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## Notification Processing Criteria
+
+For the notification-processor subagent, Calendar notifications should trigger agent when:
+
+| Criteria | Queue | Priority |
+|----------|-------|----------|
+| Reminder for event with "[AGENT]" in notes | Yes | NORMAL |
+| Reminder for event 15min before meeting | Yes | HIGH |
+| Event invitation received | Yes | NORMAL |
+| Event time changed by attendee | Yes | LOW |
+| Past event reminder | No | - |
+| Declined event reminder | No | - |
+| All-day event with no agent notes | No | - |
+
+## iCloud Storage Integration
+
+Calendar exports should use `lib/icloud-storage.js`:
+
+```javascript
+import { getPath } from '../../lib/icloud-storage.js';
+
+// Export calendar data
+const exportPath = getPath('exports', `calendar-export-${Date.now()}.json`);
+```
 
 ---
 
@@ -95,19 +168,30 @@ Per [MacScripter documentation](https://www.macscripter.net/t/dates-times-in-app
 
 ### Script Organization
 
+Uses standardized skill structure per `docs/concepts/2026-02-01-apple-integration-architecture.md`:
+
 ```
 skills/calendar/
-  skill.md              # Usage documentation
-  list-calendars.scpt   # List all calendars
-  list-today.scpt       # Today's events
-  list-week.scpt        # This week's events
-  list-events.scpt      # Events in date range
-  create-event.scpt     # Create new event
-  find-event.scpt       # Find event by UID or summary
-  modify-event.scpt     # Update event properties
-  delete-event.scpt     # Delete event
-  check-conflicts.scpt  # Find scheduling conflicts
-  add-alarm.scpt        # Add alarm to event
+├── SKILL.md                    # Main instructions with YAML frontmatter
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── calendar.js             # Core functionality (moved from lib/calendar.js)
+│   └── helpers.js              # Skill-specific helpers
+├── reference/
+│   └── applescript-examples.md # Documentation, research
+├── scripts/
+│   ├── list-calendars.scpt     # List all calendars
+│   ├── list-today.scpt         # Today's events
+│   ├── list-week.scpt          # This week's events
+│   ├── list-events.scpt        # Events in date range
+│   ├── create-event.scpt       # Create new event
+│   ├── find-event.scpt         # Find event by UID or summary
+│   ├── modify-event.scpt       # Update event properties
+│   ├── delete-event.scpt       # Delete event
+│   ├── check-conflicts.scpt    # Find scheduling conflicts
+│   └── add-alarm.scpt          # Add alarm to event
+└── tests/
+    └── *.test.js
 ```
 
 ### JSON Output Format
@@ -2109,15 +2193,72 @@ git commit -m "feat(calendar): add Node.js wrapper module for calendar operation
 
 ---
 
-## Task 10: Skill Documentation
+## Task 10: Skill Documentation (SKILL.md with Standard Header)
 
 **Files:**
-- Create: `skills/calendar/skill.md`
+- Create: `skills/calendar/SKILL.md`
+- Create: `skills/calendar/config.json`
+- Create: `.claude/commands/calendar.md`
 
-### Step 1: Write skill documentation
+### Step 1: Create config.json
+
+```json
+{
+  "name": "calendar",
+  "version": "1.0.0",
+  "description": "Calendar.app integration for Brokkr agent",
+  "scriptsDir": "scripts",
+  "notificationTriggers": {
+    "eventReminder": {
+      "requiresAgentNotes": true,
+      "priority": "NORMAL"
+    },
+    "upcomingMeeting": {
+      "minutesBefore": 15,
+      "priority": "HIGH"
+    },
+    "eventInvitation": {
+      "priority": "NORMAL"
+    }
+  },
+  "icloudExport": {
+    "category": "exports",
+    "filePrefix": "calendar-export"
+  }
+}
+```
+
+### Step 2: Create command file
+
+Create `.claude/commands/calendar.md`:
+
+```yaml
+---
+name: calendar
+description: Manage Calendar.app events - list, create, modify, delete events
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the calendar skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+### Step 3: Write skill documentation with standard header
 
 ```markdown
+---
+name: calendar
+description: Manage macOS Calendar.app events - create, list, modify, delete events and check conflicts
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
 # Calendar Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
 
 Manage macOS Calendar.app events via AppleScript for the Brokkr agent.
 
@@ -2130,6 +2271,26 @@ Manage macOS Calendar.app events via AppleScript for the Brokkr agent.
 - Modify event properties
 - Delete events
 - Check scheduling conflicts
+- Export calendar data to iCloud storage
+
+## Usage
+
+### Via Command (Manual)
+```
+/calendar list today
+/calendar create "Meeting" "2026-02-05 10:00" "2026-02-05 11:00" "Office"
+/calendar conflicts "2026-02-05 09:00" "2026-02-05 12:00"
+```
+
+### Via Notification (Automatic)
+Triggered by notification monitor when:
+- Event with "[AGENT]" in notes has reminder
+- Upcoming meeting (15 min before)
+- Event invitation received
+
+## Reference Documentation
+
+See `reference/` directory for detailed AppleScript examples.
 
 ## Prerequisites
 

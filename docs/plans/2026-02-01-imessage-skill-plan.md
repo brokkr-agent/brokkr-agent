@@ -1,5 +1,7 @@
 # iMessage Integration Skill Implementation Plan
 
+> **Architecture:** This plan follows [Apple Integration Architecture](../concepts/2026-02-01-apple-integration-architecture.md).
+
 > **For Claude:** REQUIRED SUB-SKILLS:
 > - Use `superpowers:executing-plans` or `superpowers:subagent-driven-development` to implement this plan
 > - Use `superpowers:test-driven-development` for all implementation tasks
@@ -9,6 +11,102 @@
 **Architecture:** Create an `imessage-bot.js` process that polls Messages.app via AppleScript for new messages from Tommy's phone number (+1 206-909-0025). Uses the existing session, queue, and worker infrastructure. Runs alongside whatsapp-bot.js as a separate process managed by PM2. iMessage sessions get 2-char codes like WhatsApp (CRITICAL priority). Responses sent back via AppleScript `send` command.
 
 **Tech Stack:** Node.js, better-sqlite3 (for reading messages), osascript (for sending messages), shared lib modules (queue.js, sessions.js, worker.js, message-parser.js)
+
+---
+
+## Standardized Skill Structure
+
+```
+skills/imessage/
+├── SKILL.md                    # Main instructions
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── imessage.js             # Core functionality (reader/sender)
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   └── applescript-patterns.md
+├── scripts/                    # Reusable automation scripts
+│   └── test-imessage.sh
+└── tests/
+    └── imessage.test.js
+```
+
+## Command File
+
+**Location:** `.claude/commands/imessage.md`
+
+```yaml
+---
+name: imessage
+description: Process iMessage notification or send message to Tommy
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the iMessage skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## SKILL.md Standard Header
+
+**Location:** `skills/imessage/SKILL.md`
+
+```yaml
+---
+name: imessage
+description: iMessage integration for sending/receiving messages via Messages.app. Use for communicating with Tommy via text.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# iMessage Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
+
+## Capabilities
+
+- Poll for new messages from Tommy's phone
+- Send responses back via AppleScript
+- Process commands with same syntax as WhatsApp
+- Share session pool across all channels
+
+## Usage
+
+### Via Command (Manual)
+```
+/imessage send "Hello Tommy"
+/imessage check
+```
+
+### Via Notification (Automatic)
+Triggered by notification monitor when criteria met.
+
+## Reference Documentation
+
+See `reference/` directory for detailed docs.
+```
+
+## iCloud Storage Integration
+
+Large files (if any attachments) stored using `lib/icloud-storage.js`:
+
+```javascript
+// Attachments from iMessage → iCloud
+const { getPath } = require('../../lib/icloud-storage.js');
+const attachmentPath = getPath('attachments', `imessage-${Date.now()}.png`);
+// → ~/Library/Mobile Documents/com~apple~CloudDocs/Brokkr/Attachments/YYYY-MM-DD/imessage-*.png
+```
+
+## Notification Processing Criteria
+
+| Criteria | Queue If | Drop If |
+|----------|----------|---------|
+| Sender | From Tommy (+1 206-909-0025) | Unknown numbers |
+| Content | Starts with `/` (command) | Regular conversation |
+| Chat Type | Direct message | Group chats |
+| Status | Unread messages | Already processed |
 
 ---
 
@@ -1134,33 +1232,71 @@ git commit -m "feat(bot-control): add iMessage bot management"
 
 ---
 
-## Task 7: Skill Documentation
+## Task 7: Skill Documentation (Standardized Structure)
 
 **Files:**
-- Create: `skills/imessage/skill.md`
+- Create: `skills/imessage/SKILL.md` (with frontmatter)
+- Create: `skills/imessage/config.json`
+- Create: `skills/imessage/lib/imessage.js` (move reader/sender here)
+- Create: `skills/imessage/lib/helpers.js`
+- Create: `skills/imessage/reference/applescript-patterns.md`
+- Create: `.claude/commands/imessage.md`
 
-### Step 1: Create skill directory and documentation
+### Step 1: Create skill directory structure
 
 ```bash
-mkdir -p skills/imessage
+mkdir -p skills/imessage/lib
+mkdir -p skills/imessage/reference
+mkdir -p skills/imessage/scripts
+mkdir -p skills/imessage/tests
+mkdir -p .claude/commands
 ```
 
-```markdown
+### Step 2: Create SKILL.md with frontmatter
+
+```yaml
+---
+name: imessage
+description: iMessage integration for sending/receiving messages via Messages.app. Use for communicating with Tommy via text.
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
 # iMessage Skill
 
-## Overview
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
 
-iMessage integration for the Brokkr agent system. Allows Tommy to send commands via Messages.app with the same syntax as WhatsApp.
+## Capabilities
+
+- Poll for new messages from Tommy's phone (+1 206-909-0025)
+- Send responses back via AppleScript
+- Process commands with same syntax as WhatsApp
+- Share session pool across all channels (iMessage, WhatsApp, Webhook)
+
+## Usage
+
+### Via Command (Manual)
+```
+/imessage send "Hello Tommy"
+/imessage check
+```
+
+### Via Notification (Automatic)
+Triggered by notification monitor when criteria met.
 
 ## Configuration
 
-**Tommy's Phone:** +1 206-909-0025 (hardcoded - only sender monitored)
+Edit `skills/imessage/config.json`:
 
-**Bot Process:** `imessage-bot.js`
-
-**Log File:** `/tmp/imessage-bot.log`
-
-**Lock File:** `/Users/brokkrbot/brokkr-agent/imessage-bot.lock`
+```json
+{
+  "tommy_phone": "+12069090025",
+  "polling_interval_ms": 2000,
+  "session_type": "imessage",
+  "code_length": 2,
+  "priority": "CRITICAL"
+}
+```
 
 ## Commands
 
@@ -1185,73 +1321,10 @@ Sessions show their originating channel:
 
 Any channel can resume any session (shared session pool).
 
-## Architecture
+## Reference Documentation
 
-```
-Messages.app
-    │
-    │ AppleScript polling (every 2s)
-    ▼
-imessage-bot.js
-    │
-    ├─► lib/imessage-reader.js (read messages)
-    ├─► lib/imessage-sender.js (send responses)
-    ├─► lib/message-parser.js (parse commands)
-    ├─► lib/queue.js (job queue)
-    ├─► lib/sessions.js (shared sessions)
-    └─► lib/worker.js (Claude execution)
-```
-
-## AppleScript Details
-
-### Reading Messages
-
-Uses `osascript` to query Messages.app for recent messages from Tommy's phone handle. Messages are returned with ID, text, and timestamp.
-
-### Sending Messages
-
-Uses `osascript` to send via the iMessage service to Tommy's phone number.
-
-### Permissions Required
-
-- **Accessibility**: Terminal must have accessibility access
-- **Automation**: Terminal must be allowed to control Messages.app
-
-Verify with:
-```bash
-osascript -e 'tell application "Messages" to get name'
-```
-
-## Starting/Stopping
-
-### Via PM2 (Recommended)
-
-```bash
-# Start all bots
-./scripts/bot-control.sh start
-
-# Stop all bots
-./scripts/bot-control.sh stop
-
-# Restart all bots
-./scripts/bot-control.sh restart
-
-# Status
-./scripts/bot-control.sh status
-```
-
-### Manual (for debugging)
-
-```bash
-# Live mode
-node imessage-bot.js
-
-# Dry-run mode
-node imessage-bot.js --dry-run
-
-# With debug output
-node imessage-bot.js --debug
-```
+See `reference/` directory for detailed docs:
+- `applescript-patterns.md` - AppleScript code patterns
 
 ## Troubleshooting
 
@@ -1260,31 +1333,96 @@ node imessage-bot.js --debug
 1. Check Messages.app is running
 2. Verify AppleScript permissions: `osascript -e 'tell application "Messages" to get name'`
 3. Check log file: `tail -f /tmp/imessage-bot.log`
-4. Verify Tommy's phone number is correct
 
 ### Bot not sending messages
 
 1. Check iMessage service is active in Messages.app
 2. Verify you can send messages manually to Tommy
 3. Check AppleScript: `osascript -e 'tell application "Messages" to get accounts'`
-
-### Multiple instances
-
-Only one iMessage bot can run at a time (lock file prevents duplicates):
-```bash
-rm /Users/brokkrbot/brokkr-agent/imessage-bot.lock
 ```
 
-## No Anti-Loop Needed
+### Step 3: Create config.json
 
-Tommy (tommyjohnson90@gmail.com) and Brokkr (brokkrassist@icloud.com) use separate iCloud accounts. Messages.app naturally separates incoming vs outgoing messages, so no anti-loop detection is needed.
+```json
+{
+  "tommy_phone": "+12069090025",
+  "polling_interval_ms": 2000,
+  "session_type": "imessage",
+  "code_length": 2,
+  "priority": "CRITICAL",
+  "max_message_length": 4000,
+  "retry_attempts": 3,
+  "retry_delay_ms": 2000
+}
 ```
 
-### Step 2: Commit
+### Step 4: Create command file
+
+Create `.claude/commands/imessage.md`:
+
+```yaml
+---
+name: imessage
+description: Process iMessage notification or send message to Tommy
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the iMessage skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+### Step 5: Create reference documentation
+
+Create `skills/imessage/reference/applescript-patterns.md`:
+
+```markdown
+# iMessage AppleScript Patterns
+
+## Official Documentation Sources
+
+- [Mac Automation Scripting Guide](https://developer.apple.com/library/archive/documentation/LanguagesUtilities/Conceptual/MacAutomationScriptingGuide/)
+- [Messages.sdef Analysis](https://github.com/tingraldi/SwiftScripting/blob/master/Frameworks/MessagesScripting/MessagesScripting/Messages.sdef)
+
+## Key Limitations
+
+1. Messages.app AppleScript has NO "message" class for reading
+2. Must use SQLite database for reading: `~/Library/Messages/chat.db`
+3. Sending works via `send` command to buddy/participant
+
+## Reading Pattern (via SQLite)
+
+```sql
+SELECT
+    m.ROWID,
+    m.text,
+    m.date,
+    h.id as sender
+FROM message m
+JOIN handle h ON m.handle_id = h.ROWID
+WHERE h.id LIKE '%12069090025%'
+ORDER BY m.date DESC
+LIMIT 10;
+```
+
+## Sending Pattern (via AppleScript)
+
+```applescript
+tell application "Messages"
+    set targetService to 1st account whose service type = iMessage
+    set targetBuddy to participant "+12069090025" of targetService
+    send "Hello" to targetBuddy
+end tell
+```
+```
+
+### Step 6: Commit
 
 ```bash
-git add skills/imessage/skill.md
-git commit -m "docs(imessage): add skill documentation"
+git add skills/imessage/ .claude/commands/imessage.md
+git commit -m "feat(imessage): add standardized skill structure with frontmatter"
 ```
 
 ---

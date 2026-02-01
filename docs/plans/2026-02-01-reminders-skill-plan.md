@@ -2,11 +2,83 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **Architecture Reference:** See `docs/concepts/2026-02-01-apple-integration-architecture.md` for standardized patterns.
+
 **Goal:** Add Reminders.app integration skill for the Brokkr agent, enabling creating, listing, completing, and managing reminders via AppleScript commands accessible through WhatsApp, iMessage, and webhooks.
 
-**Architecture:** Create a Reminders skill with AppleScript-based sub-scripts for CRUD operations on reminders and lists. Each operation is a standalone .scpt file that can be invoked by the Brokkr agent. Use Reminders.app's native AppleScript dictionary for all operations. Scripts return structured JSON output for parsing by the agent.
+**Architecture:** Create a Reminders skill with AppleScript-based sub-scripts for CRUD operations on reminders and lists. Each operation is a standalone .scpt file that can be invoked by the Brokkr agent. Use Reminders.app's native AppleScript dictionary for all operations. Scripts return structured JSON output for parsing by the agent. Follows standardized Apple Integration patterns for skill structure, commands, and notification processing.
 
-**Tech Stack:** AppleScript (osascript), Node.js (for invoking scripts), Reminders.app AppleScript dictionary, JSON for data exchange
+**Tech Stack:** AppleScript (osascript), Node.js (for invoking scripts), Reminders.app AppleScript dictionary, lib/icloud-storage.js for exports, JSON for data exchange
+
+---
+
+## Standardized Skill Structure
+
+```
+skills/reminders/
+├── SKILL.md                    # Main instructions (see Task 9)
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── reminders.js            # Core functionality
+│   └── helpers.js              # Skill-specific helpers
+├── reference/                  # Documentation, research
+│   └── applescript-examples.md
+├── scripts/                    # Reusable AppleScript files
+│   ├── list-lists.scpt
+│   ├── list-all.scpt
+│   ├── list-incomplete.scpt
+│   ├── list-due.scpt
+│   ├── create-reminder.scpt
+│   ├── find-reminder.scpt
+│   ├── complete-reminder.scpt
+│   ├── delete-reminder.scpt
+│   └── modify-reminder.scpt
+└── tests/
+    └── *.test.js
+```
+
+## Command File
+
+Create `.claude/commands/reminders.md`:
+
+```yaml
+---
+name: reminders
+description: Manage Reminders.app - list, create, complete, modify reminders
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the reminders skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+## Notification Processing Criteria
+
+For the notification-processor subagent, Reminders notifications should trigger agent when:
+
+| Criteria | Queue | Priority |
+|----------|-------|----------|
+| Reminder with "[AGENT]" tag in name | Yes | HIGH |
+| Reminder due within 1 hour | Yes | NORMAL |
+| High priority (!!!) reminder due today | Yes | HIGH |
+| Reminder from shared list (collaboration) | Yes | NORMAL |
+| Already completed reminder | No | - |
+| Low priority reminder not due today | No | - |
+| Recurring reminder (handled separately) | No | - |
+
+## iCloud Storage Integration
+
+Reminders exports should use `lib/icloud-storage.js`:
+
+```javascript
+import { getPath } from '../../lib/icloud-storage.js';
+
+// Export reminders data
+const exportPath = getPath('exports', `reminders-export-${Date.now()}.json`);
+```
 
 ---
 
@@ -91,18 +163,29 @@ Per [MacStories tutorial](https://www.macstories.net/tutorials/enhancing-reminde
 
 ### Script Organization
 
+Uses standardized skill structure per `docs/concepts/2026-02-01-apple-integration-architecture.md`:
+
 ```
 skills/reminders/
-  skill.md              # Usage documentation
-  list-lists.scpt       # List all reminder lists
-  list-all.scpt         # List all reminders
-  list-incomplete.scpt  # List incomplete reminders
-  list-due.scpt         # List reminders due in timeframe
-  create-reminder.scpt  # Create new reminder
-  find-reminder.scpt    # Find reminder by ID or name
-  complete-reminder.scpt # Mark reminder as complete
-  delete-reminder.scpt  # Delete reminder
-  modify-reminder.scpt  # Update reminder properties
+├── SKILL.md                    # Main instructions with YAML frontmatter
+├── config.json                 # Integration-specific config
+├── lib/
+│   ├── reminders.js            # Core functionality (moved from lib/reminders.js)
+│   └── helpers.js              # Skill-specific helpers
+├── reference/
+│   └── applescript-examples.md # Documentation, research
+├── scripts/
+│   ├── list-lists.scpt         # List all reminder lists
+│   ├── list-all.scpt           # List all reminders
+│   ├── list-incomplete.scpt    # List incomplete reminders
+│   ├── list-due.scpt           # List reminders due in timeframe
+│   ├── create-reminder.scpt    # Create new reminder
+│   ├── find-reminder.scpt      # Find reminder by ID or name
+│   ├── complete-reminder.scpt  # Mark reminder as complete
+│   ├── delete-reminder.scpt    # Delete reminder
+│   └── modify-reminder.scpt    # Update reminder properties
+└── tests/
+    └── *.test.js
 ```
 
 ### JSON Output Format
@@ -1897,15 +1980,76 @@ git commit -m "feat(reminders): add Node.js wrapper module for reminders operati
 
 ---
 
-## Task 9: Skill Documentation
+## Task 9: Skill Documentation (SKILL.md with Standard Header)
 
 **Files:**
-- Create: `skills/reminders/skill.md`
+- Create: `skills/reminders/SKILL.md`
+- Create: `skills/reminders/config.json`
+- Create: `.claude/commands/reminders.md`
 
-### Step 1: Write skill documentation
+### Step 1: Create config.json
+
+```json
+{
+  "name": "reminders",
+  "version": "1.0.0",
+  "description": "Reminders.app integration for Brokkr agent",
+  "scriptsDir": "scripts",
+  "notificationTriggers": {
+    "agentTagged": {
+      "tagPattern": "[AGENT]",
+      "priority": "HIGH"
+    },
+    "dueSoon": {
+      "hoursBeforeDue": 1,
+      "priority": "NORMAL"
+    },
+    "highPriorityDueToday": {
+      "priorityValue": 1,
+      "priority": "HIGH"
+    },
+    "sharedListUpdate": {
+      "priority": "NORMAL"
+    }
+  },
+  "icloudExport": {
+    "category": "exports",
+    "filePrefix": "reminders-export"
+  }
+}
+```
+
+### Step 2: Create command file
+
+Create `.claude/commands/reminders.md`:
+
+```yaml
+---
+name: reminders
+description: Manage Reminders.app - list, create, complete, modify reminders
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
+---
+
+Load the reminders skill and process: $ARGUMENTS
+
+Context from notification (if triggered by monitor):
+!`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
+```
+
+### Step 3: Write skill documentation with standard header
 
 ```markdown
+---
+name: reminders
+description: Manage macOS Reminders.app - create, list, complete, modify, delete reminders
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
 # Reminders Skill
+
+> **For Claude:** This skill is part of the Apple Integration suite.
+> See `docs/concepts/2026-02-01-apple-integration-architecture.md` for patterns.
 
 Manage macOS Reminders.app via AppleScript for the Brokkr agent.
 
@@ -1918,6 +2062,27 @@ Manage macOS Reminders.app via AppleScript for the Brokkr agent.
 - Mark reminders as complete
 - Modify reminder properties
 - Delete reminders
+- Export reminders data to iCloud storage
+
+## Usage
+
+### Via Command (Manual)
+```
+/reminders list
+/reminders due 7
+/reminders create "Call dentist" "2026-02-10 14:00:00" "Schedule checkup"
+/reminders complete <id>
+```
+
+### Via Notification (Automatic)
+Triggered by notification monitor when:
+- Reminder with "[AGENT]" tag in name
+- Reminder due within 1 hour
+- High priority (!!!) reminder due today
+
+## Reference Documentation
+
+See `reference/` directory for detailed AppleScript examples.
 
 ## Prerequisites
 
