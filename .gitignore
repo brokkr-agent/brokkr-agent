@@ -18,3 +18,4 @@ heartbeat.json
 jobs/**/*.json
 sessions/*.json
 data/task-patterns.json
+skills/brokkr-mvp/config.json
