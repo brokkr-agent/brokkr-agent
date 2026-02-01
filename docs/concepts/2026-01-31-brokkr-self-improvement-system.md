@@ -186,6 +186,89 @@ During idle time:
 
 ## Implementation Phases
 
+### Phase 0 - macOS System Setup (Required First)
+
+Configure macOS for autonomous operation. These settings allow Brokkr to run 24/7 without user intervention.
+
+#### Power Management (Prevent Sleep)
+
+```bash
+# Prevent system sleep
+sudo pmset -a sleep 0
+
+# Prevent disk sleep
+sudo pmset -a disksleep 0
+
+# Prevent display sleep
+sudo pmset -a displaysleep 0
+
+# Disable standby/hibernate
+sudo pmset -a standby 0
+sudo pmset -a hibernatemode 0
+
+# Verify with: pmset -g
+```
+
+#### Privacy & Security Permissions (System Settings → Privacy & Security)
+
+**Accessibility** (required for AppleScript UI control):
+- [ ] Terminal
+- [ ] osascript (if appears)
+- [ ] Script Editor
+
+**Full Disk Access** (required for reading Mail, Messages, TCC database):
+- [ ] Terminal
+- [ ] /opt/homebrew/opt/node@22/bin/node
+
+**Automation** (grant Terminal control over each app):
+- [ ] Terminal → System Events
+- [ ] Terminal → Messages
+- [ ] Terminal → Mail
+- [ ] Terminal → Calendar
+- [ ] Terminal → Reminders
+- [ ] Terminal → Notes
+- [ ] Terminal → Finder
+
+*Note: Automation permissions prompt automatically on first use. Approve when prompted.*
+
+#### Lock Screen Settings (System Settings → Lock Screen)
+
+- [ ] "Turn display off when inactive" → Never
+- [ ] "Require password after screen saver" → Never (or long delay)
+
+#### FileVault Note
+
+FileVault is ON (recommended for security). This means:
+- After reboot, password required once to unlock disk
+- After unlock, Brokkr auto-starts via launchd
+- No fully unattended reboot possible without disabling FileVault
+
+#### Verification After Terminal Restart
+
+After restarting Terminal, verify permissions work:
+
+```bash
+# Test AppleScript access to Messages
+osascript -e 'tell application "Messages" to get name'
+
+# Test AppleScript access to Calendar
+osascript -e 'tell application "Calendar" to get name of calendars'
+
+# Test AppleScript access to Mail
+osascript -e 'tell application "Mail" to get name of mailboxes'
+
+# Test AppleScript access to Reminders
+osascript -e 'tell application "Reminders" to get name of lists'
+
+# Test AppleScript access to Notes
+osascript -e 'tell application "Notes" to get name of folders'
+
+# Verify power settings
+pmset -g
+```
+
+If any command fails with "not authorized", re-check the Automation permissions in System Settings.
+
 ### Phase 1 - iMessage Foundation
 1. iMessage skill (send/receive scripts)
 2. Message polling integration
