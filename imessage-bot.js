@@ -283,18 +283,24 @@ export async function processCommand(options) {
   // Group messages never get session codes
   const isTommy = isTommyMessage(phoneNumber) && !isGroupMessage;
 
-  // Consultation check for natural messages from untrusted contacts
-  // Only applies when treatAsNatural is true and message doesn't start with /
-  if (treatAsNatural && !text.startsWith('/') && !isTommy && contact) {
+  // SECURITY: Permission check for ALL messages from non-Tommy contacts
+  // This applies to both commands AND natural messages
+  if (!isTommy && contact) {
+    // Check if consultation is needed (untrusted or partial_trust contacts)
     if (shouldConsultTommy(contact, text)) {
-      // Build display name for the consultation message
-      const contactName = contact.display_name || phoneNumber;
+      // Use proper sendConsultation to create session code for allow/deny
+      const pendingEntry = await sendConsultation({
+        contact,
+        message: text,
+        sendMessage: (phone, msg) => safeSendMessage(phone, msg, { dryRun: DRY_RUN }),
+        tommyPhone: TOMMY_PHONE
+      });
 
-      // Send consultation to Tommy with formatted message
-      await sendMessage(TOMMY_PHONE, `${contactName} asked:\n\n"${text}"`);
-
-      return { type: 'consultation_pending', phoneNumber };
+      console.log(`[SECURITY] Created consultation /${pendingEntry.sessionCode} for ${contact.display_name || phoneNumber}: "${text.slice(0, 50)}..."`);
+      return { type: 'consultation_pending', phoneNumber, sessionCode: pendingEntry.sessionCode };
     }
+    // If contact is trusted (shouldConsultTommy returns false), allow through
+    console.log(`[SECURITY] Trusted contact ${contact.display_name || phoneNumber} - allowing message through`);
   }
 
   const parsed = parseMessage(text, { treatAsNatural });

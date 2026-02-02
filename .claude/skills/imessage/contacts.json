@@ -17,7 +17,11 @@
     "spam_score": 0,
     "ignore": false,
     "first_seen": "2026-02-01T00:00:00Z",
-    "last_interaction": "2026-02-01T00:00:00Z"
+    "last_interaction": "2026-02-01T00:00:00Z",
+    "standing_instructions": [
+      "Always process contact cards forwarded via iMessage and add them to contacts database",
+      "Extract phone number, name, email, and any other details from forwarded contacts"
+    ]
   },
   "+15555555555": {
     "id": "+15555555555",
@@ -108,8 +112,10 @@
     "country": "us",
     "display_name": "Ali Kennedy",
     "relationship": "family",
-    "notes": "Tommy's sister. Email: alikennedy14@gmail.com. Granted elevated permissions by Tommy on 2026-02-01.",
+    "notes": "Tommy's sister. Email: alikennedy14@gmail.com. Granted elevated permissions by Tommy on 2026-02-01. Has been making fun of Brokkr.",
     "trust_level": "family",
+    "notify_owner": true,
+    "forward_transcripts": true,
     "permissions": {
       "calendar": {
         "view": true,
@@ -126,7 +132,7 @@
     ],
     "denied_requests": [],
     "approved_requests": [],
-    "response_style": null,
+    "response_style": "sarcastic_la_valley_girl",
     "topics_discussed": [],
     "sentiment_history": null,
     "spam_score": 0,
@@ -140,13 +146,11 @@
     "country": "us",
     "display_name": "Lizzie",
     "relationship": "friend",
-    "notes": "Added by Tommy on 2026-02-01.",
-    "trust_level": "trusted",
+    "notes": "Added by Tommy on 2026-02-01. SECURITY: Downgraded from trusted to partial_trust on 2026-02-02.",
+    "trust_level": "partial_trust",
     "notify_owner": true,
     "permissions": {},
-    "command_permissions": [
-      "*"
-    ],
+    "command_permissions": [],
     "denied_requests": [],
     "approved_requests": [],
     "response_style": null,
@@ -163,15 +167,13 @@
     "country": "us",
     "display_name": "Lauren",
     "relationship": "business",
-    "notes": "Added by Tommy on 2026-02-01. Email: l.hill16@icloud.com. Birthday: May 5, 1993. Location: Cranston, RI. PERMISSIONS: Brokkr sales permissions. RESPONSE STYLE: Use sarcastic northeastern US tone during testing.",
-    "trust_level": "trusted",
+    "notes": "Added by Tommy on 2026-02-01. Email: l.hill16@icloud.com. Birthday: May 5, 1993. Location: Cranston, RI. PERMISSIONS: Brokkr sales permissions. RESPONSE STYLE: Use sarcastic northeastern US tone during testing. SECURITY: Downgraded from trusted to partial_trust on 2026-02-02.",
+    "trust_level": "partial_trust",
     "notify_owner": true,
     "permissions": {
       "brokkr_sales": true
     },
-    "command_permissions": [
-      "*"
-    ],
+    "command_permissions": [],
     "denied_requests": [],
     "approved_requests": [],
     "response_style": "sarcastic_northeast_us",
@@ -198,6 +200,27 @@
     "spam_score": 0,
     "ignore": false,
     "first_seen": "2026-02-02T04:38:55.118Z",
-    "last_interaction": "2026-02-02T04:38:55.118Z"
+    "last_interaction": "2026-02-02T21:20:01.559Z"
+  },
+  "+12065194618": {
+    "id": "+12065194618",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": "Tori",
+    "relationship": "friend",
+    "notes": "Added by Tommy on 2026-02-01. Response style: creepy LA tone. SECURITY: Downgraded from trusted to partial_trust on 2026-02-02.",
+    "trust_level": "partial_trust",
+    "notify_owner": true,
+    "permissions": {},
+    "command_permissions": [],
+    "denied_requests": [],
+    "approved_requests": [],
+    "response_style": "creepy_la",
+    "topics_discussed": [],
+    "sentiment_history": null,
+    "spam_score": 0,
+    "ignore": false,
+    "first_seen": "2026-02-02T07:56:00.000Z",
+    "last_interaction": "2026-02-02T07:56:00.000Z"
   }
 }
