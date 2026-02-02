@@ -20,17 +20,38 @@ import { existsSync, writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 // Import library modules
-import { getRecentMessages, getAllRecentMessages } from './lib/imessage-reader.js';
-import { safeSendMessage } from './lib/imessage-sender.js';
+import { getRecentMessages, getAllRecentMessages, getChatInfo } from './lib/imessage-reader.js';
+import { safeSendMessage, safeSendGroupMessage } from './lib/imessage-sender.js';
 import { parseMessage, getHelpText } from './lib/message-parser.js';
-import { enqueue, PRIORITY, getQueueDepth } from './lib/queue.js';
+import { enqueue, PRIORITY, getQueueDepth, getActiveJob } from './lib/queue.js';
 import { createSession, getSessionByCode, listSessions, expireSessions } from './lib/sessions.js';
-import { processNextJob, setSendMessageCallback, setDryRunMode, isProcessing, getCurrentSessionCode } from './lib/worker.js';
+// Note: Worker logic moved to standalone worker.js process
+
+/**
+ * Check if a job is currently being processed (uses queue state)
+ * @returns {boolean} True if a job is active
+ */
+function isProcessing() {
+  return getActiveJob() !== null;
+}
+
+/**
+ * Get the current session code being processed (uses queue state)
+ * @returns {string|null} Session code or null
+ */
+function getCurrentSessionCode() {
+  const activeJob = getActiveJob();
+  return activeJob?.sessionCode || null;
+}
 import { startupCleanup } from './lib/resources.js';
 import { getBusyMessage, getStatusMessage } from './lib/busy-handler.js';
 import { shouldConsultTommy, sendConsultation } from './lib/imessage-consultation.js';
 import { getPendingByCode, resolvePending, getPendingQuestions } from './lib/imessage-pending.js';
 import { getContact, getOrCreateContact } from './lib/imessage-permissions.js';
+import { GroupMonitor } from './lib/group-monitor.js';
+
+// Initialize group monitor for tracking Brokkr mentions in group chats
+const groupMonitor = new GroupMonitor();
 
 // Configuration constants
 export const TOMMY_PHONE = '+12069090025';
@@ -55,8 +76,6 @@ const LOCK_FILE = join(WORKSPACE, 'imessage-bot.lock');
 const SESSION_EXPIRY_INTERVAL_MS = 60 * 60 * 1000;
 // Session max age: 24 hours (in ms)
 const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-// Queue processing interval: 1 second
-const QUEUE_PROCESS_INTERVAL_MS = 1000;
 
 // Track last processed message ID to avoid reprocessing
 let lastProcessedId = 0;
@@ -241,13 +260,28 @@ function getSessionAge(createdAt) {
  * @param {Function} options.sendMessage - Function to send messages (for testing)
  * @param {Object} options.contact - Optional contact object for permission checking
  * @param {boolean} options.treatAsNatural - If true, treat non-command as natural message (enables consultation)
+ * @param {Object} options.chatInfo - Optional chat info for group message handling
  * @returns {Promise<Object>} Result object with type and details
  */
 export async function processCommand(options) {
-  const { text, phoneNumber, sendMessage = (phone, msg) => safeSendMessage(phone, msg, { dryRun: DRY_RUN }), contact = null, treatAsNatural = false } = options;
+  const { text, phoneNumber, sendMessage: customSendMessage = null, contact = null, treatAsNatural = false, chatInfo = null } = options;
 
-  // Check if sender is Tommy - only Tommy gets session codes
-  const isTommy = isTommyMessage(phoneNumber);
+  // Determine if this is a group message
+  const isGroupMessage = chatInfo?.isGroup === true;
+
+  // Create appropriate send function based on chat type
+  const sendMessage = customSendMessage || ((target, msg) => {
+    if (isGroupMessage && chatInfo?.guid) {
+      console.log(`[DEBUG] Sending to group chat: ${chatInfo.guid}`);
+      return safeSendGroupMessage(chatInfo.guid, msg, { dryRun: DRY_RUN });
+    } else {
+      return safeSendMessage(target, msg, { dryRun: DRY_RUN });
+    }
+  });
+
+  // Check if sender is Tommy - only Tommy gets session codes (and only in direct messages)
+  // Group messages never get session codes
+  const isTommy = isTommyMessage(phoneNumber) && !isGroupMessage;
 
   // Consultation check for natural messages from untrusted contacts
   // Only applies when treatAsNatural is true and message doesn't start with /
@@ -263,27 +297,41 @@ export async function processCommand(options) {
     }
   }
 
-  const parsed = parseMessage(text);
-  console.log(`Parsed type: ${parsed.type}`);
+  const parsed = parseMessage(text, { treatAsNatural });
+  console.log(`Parsed type: ${parsed.type}, treatAsNatural: ${treatAsNatural}, isTommy: ${isTommy}`);
 
   // Handle different parsed types
   switch (parsed.type) {
     case 'not_command':
-      // Shouldn't happen since we filter for / above
+      // Non-command message when treatAsNatural is false - ignore
+      console.log(`[DEBUG] Ignoring not_command message (treatAsNatural=${treatAsNatural})`);
       return { type: 'not_command' };
+
+    case 'natural_message':
+      // Natural conversation message - treat as /claude command
+      console.log(`[DEBUG] Processing natural message as /claude task: "${parsed.message.slice(0, 50)}..."`);
+      // Create a synthetic parsed object that looks like a /claude command
+      const syntheticParsed = {
+        type: 'command',
+        commandName: 'claude',
+        command: { name: 'claude', handler: { type: 'claude', prompt: '$ARGUMENTS' } },
+        argString: parsed.message,
+        handler: { type: 'claude', prompt: '$ARGUMENTS' }
+      };
+      return await handleParsedCommand(syntheticParsed, phoneNumber, sendMessage, isTommy, chatInfo);
 
     case 'unknown_command':
       await sendMessage(phoneNumber, `Unknown command: /${parsed.commandName}\n\nUse /help to see available commands.`);
       return { type: 'unknown' };
 
     case 'session_resume':
-      return await handleSessionResume(parsed, phoneNumber, sendMessage, isTommy);
+      return await handleSessionResume(parsed, phoneNumber, sendMessage, isTommy, chatInfo);
 
     case 'command':
-      return await handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy);
+      return await handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy, chatInfo);
 
     default:
-      console.log(`Unknown parsed type: ${parsed.type}`);
+      console.log(`[DEBUG] Unknown parsed type: ${parsed.type}`);
       return { type: 'unknown' };
   }
 }
@@ -294,29 +342,130 @@ export async function processCommand(options) {
  * @param {string} phoneNumber - Phone number to respond to
  * @param {Function} sendMessage - Function to send messages
  * @param {boolean} isTommy - Whether sender is Tommy (includes session codes if true)
+ * @param {Object} chatInfo - Chat info for group detection
  * @returns {Promise<Object>} Result object
  */
-async function handleSessionResume(parsed, phoneNumber, sendMessage, isTommy = true) {
+async function handleSessionResume(parsed, phoneNumber, sendMessage, isTommy = true, chatInfo = null) {
   const { sessionCode, message } = parsed;
+  // Use group GUID as chatId if this is a group message
+  const responseChatId = chatInfo?.isGroup && chatInfo?.guid ? chatInfo.guid : phoneNumber;
 
   // Check for allow/deny commands BEFORE normal session resume
-  const normalizedMessage = (message || '').trim().toLowerCase();
-  if (normalizedMessage === 'allow' || normalizedMessage === 'deny') {
+  // Format: /<xx> <allow|y|deny|n> [/ <additional instructions>]
+  const messageText = (message || '').trim();
+  const messageLower = messageText.toLowerCase();
+
+  // Check for approval/denial patterns
+  // First word determines action: y/allow = approve, n/deny = reject
+  const firstWord = messageLower.split(/[\s\/]/)[0];  // Split on space or /
+  const isApproval = firstWord === 'allow' || firstWord === 'y' || firstWord === 'yes';
+  const isDenial = firstWord === 'deny' || firstWord === 'n' || firstWord === 'no';
+
+  console.log(`[DEBUG handleSessionResume] sessionCode=${sessionCode}, messageText="${messageText}", firstWord="${firstWord}", isApproval=${isApproval}, isDenial=${isDenial}`);
+
+  if (isApproval || isDenial) {
     // Check if there's a pending question for this session code
     const pending = getPendingByCode(sessionCode);
+    console.log(`[DEBUG handleSessionResume] pending lookup result:`, pending ? { code: pending.sessionCode, status: pending.status } : 'null');
     if (pending && pending.status === 'pending') {
-      // Resolve the pending question
-      const action = normalizedMessage;
-      resolvePending(sessionCode, action);
 
-      // Send confirmation to Tommy
-      if (action === 'allow') {
-        await sendMessage(phoneNumber, `Request approved for /${sessionCode}`);
+      if (isApproval) {
+        // Parse for additional instructions after "/"
+        // Format: "allow / update contact name to John" or "y / he's my coworker"
+        let additionalInstructions = null;
+        const slashIndex = messageText.indexOf('/');
+        if (slashIndex > 0) {
+          additionalInstructions = messageText.slice(slashIndex + 1).trim();
+        }
+
+        // Resolve the pending question
+        resolvePending(sessionCode, 'allow');
+
+        // Build the task for Claude
+        const originalQuestion = pending.question;
+        const originalPhoneNumber = pending.phoneNumber;
+        const contactName = pending.context?.replace('From ', '') || originalPhoneNumber;
+
+        let task;
+        if (additionalInstructions) {
+          // Include Tommy's additional instructions for Claude
+          task = `${contactName} asked: "${originalQuestion}"
+
+Tommy's instructions: ${additionalInstructions}
+
+Respond to ${contactName} and follow Tommy's instructions (which may include updating contact details, permissions, etc.)`;
+        } else {
+          // Just process the original question
+          task = originalQuestion;
+        }
+
+        const session = createSession({
+          type: 'imessage',
+          task,
+          chatId: originalPhoneNumber
+        });
+
+        // Enqueue the job to process the request
+        enqueue({
+          task,
+          chatId: originalPhoneNumber,
+          source: 'imessage',
+          sessionCode: session.code,
+          priority: PRIORITY.CRITICAL,
+          phoneNumber: originalPhoneNumber
+        });
+
+        // Send confirmation to Tommy
+        const confirmMsg = additionalInstructions
+          ? `Approved /${sessionCode} with instructions. Processing for ${contactName}...`
+          : `Approved /${sessionCode}. Processing for ${contactName}...`;
+        await sendMessage(phoneNumber, confirmMsg);
+
+        return { type: 'consultation_approved', sessionCode, newSessionCode: session.code, hasInstructions: !!additionalInstructions };
       } else {
-        await sendMessage(phoneNumber, `Request denied for /${sessionCode}`);
-      }
+        // Deny - check for additional instructions (e.g., "n / restrict this contact")
+        let additionalInstructions = null;
+        const slashIndex = messageText.indexOf('/');
+        if (slashIndex > 0) {
+          additionalInstructions = messageText.slice(slashIndex + 1).trim();
+        }
 
-      return { type: 'consultation_resolved', sessionCode, action };
+        // Resolve the pending question
+        resolvePending(sessionCode, 'deny');
+
+        if (additionalInstructions) {
+          // Process instructions with Claude (e.g., restrict contact, update permissions)
+          const originalPhoneNumber = pending.phoneNumber;
+          const contactName = pending.context?.replace('From ', '') || originalPhoneNumber;
+
+          const task = `Request from ${contactName} was DENIED: "${pending.question}"
+
+Tommy's instructions: ${additionalInstructions}
+
+Follow Tommy's instructions to update contact settings, restrictions, etc. Do NOT respond to the contact.`;
+
+          const session = createSession({
+            type: 'imessage',
+            task,
+            chatId: phoneNumber  // Send response to Tommy, not the contact
+          });
+
+          enqueue({
+            task,
+            chatId: phoneNumber,
+            source: 'imessage',
+            sessionCode: session.code,
+            priority: PRIORITY.CRITICAL,
+            phoneNumber: phoneNumber
+          });
+
+          await sendMessage(phoneNumber, `Denied /${sessionCode} with instructions. Processing...`);
+          return { type: 'consultation_denied', sessionCode, hasInstructions: true };
+        } else {
+          await sendMessage(phoneNumber, `Denied /${sessionCode}`);
+          return { type: 'consultation_denied', sessionCode };
+        }
+      }
     }
     // If no pending question or already resolved, fall through to normal session resume
   }
@@ -335,10 +484,10 @@ async function handleSessionResume(parsed, phoneNumber, sendMessage, isTommy = t
   // Check queue position and enqueue
   const queuePos = getQueueDepth() + 1;
 
-  // Enqueue the job
+  // Enqueue the job - use group GUID as chatId for group chats
   enqueue({
     task,
-    chatId: phoneNumber,
+    chatId: responseChatId,
     source: 'imessage',
     sessionCode: session.code,
     priority: PRIORITY.CRITICAL,
@@ -381,10 +530,14 @@ async function handleSessionResume(parsed, phoneNumber, sendMessage, isTommy = t
  * @param {string} phoneNumber - Phone number to respond to
  * @param {Function} sendMessage - Function to send messages
  * @param {boolean} isTommy - Whether sender is Tommy (includes session codes if true)
+ * @param {Object} chatInfo - Chat info for group detection
  * @returns {Promise<Object>} Result object
  */
-async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = true) {
+async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = true, chatInfo = null) {
   const { handler, commandName, argString } = parsed;
+  // Use group GUID as chatId if this is a group message
+  const responseChatId = chatInfo?.isGroup && chatInfo?.guid ? chatInfo.guid : phoneNumber;
+  console.log(`[DEBUG handleParsedCommand] chatInfo=${JSON.stringify(chatInfo)}, responseChatId=${responseChatId}`);
 
   // Handle internal commands immediately
   if (handler.type === 'internal') {
@@ -422,13 +575,13 @@ async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = t
           const contact = getContact(question.phoneNumber);
           const contactName = contact?.display_name || question.phoneNumber;
 
-          // Truncate question to 50 chars
-          const truncatedQuestion = question.question.length > 50
-            ? question.question.slice(0, 50) + '...'
+          // Show full question (up to 200 chars) for better context
+          const displayQuestion = question.question.length > 200
+            ? question.question.slice(0, 200) + '...'
             : question.question;
 
           response += `/${question.sessionCode} - ${contactName}\n`;
-          response += `  "${truncatedQuestion}"\n\n`;
+          response += `"${displayQuestion}"\n\n`;
         }
         response += 'Reply: /<code> allow or /<code> deny';
         await sendMessage(phoneNumber, response);
@@ -458,16 +611,17 @@ async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = t
     const session = createSession({
       type: 'imessage',
       task,
-      chatId: phoneNumber
+      chatId: responseChatId
     });
 
     // Check queue position before enqueueing
     const queuePos = getQueueDepth() + 1;
 
-    // Enqueue the job
+    // Enqueue the job - use group GUID as chatId for group chats
+    console.log(`[DEBUG enqueue] Enqueueing job with chatId=${responseChatId}, isGroupChat=${chatInfo?.isGroup}`);
     enqueue({
       task,
-      chatId: phoneNumber,
+      chatId: responseChatId,
       source: 'imessage',
       sessionCode: session.code,
       priority: PRIORITY.CRITICAL,
@@ -476,19 +630,25 @@ async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = t
 
     // Respond based on processing state
     // Include session code only for Tommy
-    if (isProcessing()) {
-      if (isTommy) {
-        await sendMessage(phoneNumber, `${getBusyMessage(queuePos)}\nSession: /${session.code}`);
+    // Skip pre-alert messages for group chats (per plan spec)
+    const isGroupChat = chatInfo?.isGroup === true;
+
+    if (!isGroupChat) {
+      if (isProcessing()) {
+        if (isTommy) {
+          await sendMessage(phoneNumber, `${getBusyMessage(queuePos)}\nSession: /${session.code}`);
+        } else {
+          await sendMessage(phoneNumber, getBusyMessage(queuePos));
+        }
       } else {
-        await sendMessage(phoneNumber, getBusyMessage(queuePos));
-      }
-    } else {
-      if (isTommy) {
-        await sendMessage(phoneNumber, `Starting... Session: /${session.code}`);
-      } else {
-        await sendMessage(phoneNumber, 'Starting your task...');
+        if (isTommy) {
+          await sendMessage(phoneNumber, `Starting... Session: /${session.code}`);
+        } else {
+          await sendMessage(phoneNumber, 'Starting your task...');
+        }
       }
     }
+    // Group chats: no pre-alert, just process silently
 
     return { type: 'claude', sessionCode: session.code, task };
   }
@@ -511,6 +671,7 @@ async function handleParsedCommand(parsed, phoneNumber, sendMessage, isTommy = t
  * @param {Function} deps.getRecentMessages - Function to get recent messages from a phone
  * @param {Function} deps.getAllRecentMessages - Function to get all recent messages
  * @param {Function} deps.getOrCreateContact - Function to get or create a contact
+ * @param {Function} deps.getChatInfo - Function to get chat info from chat_id
  * @param {Function} deps.processCommand - Function to process a command
  * @param {Set} deps.processedIds - Set of processed message IDs
  * @param {boolean} deps.isFirstPoll - Whether this is the first poll (mark as seen)
@@ -521,6 +682,7 @@ export async function pollMessagesWithDeps(deps) {
     getRecentMessages: getRecentMessagesFn,
     getAllRecentMessages: getAllRecentMessagesFn,
     getOrCreateContact: getOrCreateContactFn,
+    getChatInfo: getChatInfoFn = getChatInfo,
     processCommand: processCommandFn,
     processedIds,
     isFirstPoll
@@ -574,13 +736,41 @@ export async function pollMessagesWithDeps(deps) {
         ? getOrCreateContactFn(msg.sender, 'iMessage', 'us')
         : null;
 
+      // Get chat info to determine if this is a group message
+      // chat_id is only available in universal mode (from getAllRecentMessages)
+      let chatInfo = null;
+      if (universalAccess && msg.chat_id) {
+        chatInfo = getChatInfoFn(msg.chat_id);
+        if (chatInfo?.isGroup) {
+          console.log(`[DEBUG] Group chat detected: ${chatInfo.guid} (${chatInfo.memberCount} members)`);
+        }
+      }
+
+      const treatAsNatural = universalAccess && !isCommand;
       console.log(`\n[${new Date().toISOString()}] Received from ${phoneNumber}: "${msg.text}"`);
+      console.log(`[DEBUG] isCommand=${isCommand}, universalAccess=${universalAccess}, treatAsNatural=${treatAsNatural}, isGroup=${chatInfo?.isGroup || false}`);
+
+      // For group chats with natural messages, check if Brokkr should respond
+      if (chatInfo?.isGroup && treatAsNatural) {
+        const groupResponse = groupMonitor.processMessage({
+          groupId: chatInfo.guid,
+          text: msg.text,
+          sender: phoneNumber
+        });
+        console.log(`[DEBUG] Group monitor: shouldRespond=${groupResponse.shouldRespond}, reason=${groupResponse.reason}`);
+
+        if (!groupResponse.shouldRespond) {
+          // Skip processing - Brokkr was not mentioned/addressed
+          continue;
+        }
+      }
 
       await processCommandFn({
         text: msg.text,
         phoneNumber,
         contact,
-        treatAsNatural: universalAccess && !isCommand
+        treatAsNatural,
+        chatInfo
       });
     }
 
@@ -621,30 +811,17 @@ export async function pollMessages() {
 }
 
 // ============================================
-// Queue Processing
+// Helper Functions
 // ============================================
 
 /**
- * Process next job from queue if not busy
+ * Check if a chat ID is a group chat GUID
+ * Group GUIDs typically contain 'chat' (e.g., 'iMessage;+;chat12345' or 'chat12345')
+ * @param {string} chatId - Chat ID to check
+ * @returns {boolean} True if this is a group chat GUID
  */
-async function processQueue() {
-  if (!isProcessing()) {
-    await processNextJob();
-  }
-}
-
-// ============================================
-// Safe message sending wrapper
-// ============================================
-
-/**
- * Send message via iMessage with dry-run support
- * Used as callback for worker.js
- * @param {string} chatId - Phone number to send to
- * @param {string} message - Message to send
- */
-async function workerSendMessage(chatId, message) {
-  await safeSendMessage(chatId, message, { dryRun: DRY_RUN });
+function isGroupChatId(chatId) {
+  return chatId && (chatId.includes('chat') || chatId.includes(';+;'));
 }
 
 // ============================================
@@ -652,31 +829,21 @@ async function workerSendMessage(chatId, message) {
 // ============================================
 
 let pollingInterval = null;
-let queueInterval = null;
 let sessionExpiryInterval = null;
 
 /**
- * Start the bot's main loops
+ * Start the poller's main loops
+ * Note: Queue processing is handled by the standalone worker.js process
  */
 function startBot() {
   const mode = DRY_RUN ? 'DRY-RUN' : 'LIVE';
   console.log(`\nMode: ${mode}`);
   console.log('Starting message polling...');
+  console.log('Note: Job processing handled by worker.js');
   console.log('Commands: /claude, /help, /status, /sessions, /research, /github, /x, /youtube, /email, /schedule\n');
-
-  // Register the send callback with the worker
-  setSendMessageCallback(workerSendMessage);
-
-  // Set dry-run mode in worker if enabled
-  if (DRY_RUN) {
-    setDryRunMode(true);
-  }
 
   // Start polling for messages
   pollingInterval = setInterval(pollMessages, POLLING_INTERVAL_MS);
-
-  // Start queue processing interval (every 1 second)
-  queueInterval = setInterval(processQueue, QUEUE_PROCESS_INTERVAL_MS);
 
   // Start session expiry interval (every hour)
   sessionExpiryInterval = setInterval(() => {
@@ -712,7 +879,6 @@ function cleanup() {
 
   // Clear intervals
   if (pollingInterval) clearInterval(pollingInterval);
-  if (queueInterval) clearInterval(queueInterval);
   if (sessionExpiryInterval) clearInterval(sessionExpiryInterval);
 
   // Release lock

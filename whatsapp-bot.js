@@ -8,9 +8,27 @@ import { join } from 'path';
 
 // Import library modules
 import { parseMessage, getHelpText } from './lib/message-parser.js';
-import { enqueue, PRIORITY, getQueueDepth } from './lib/queue.js';
+import { enqueue, PRIORITY, getQueueDepth, getActiveJob } from './lib/queue.js';
 import { createSession, getSessionByCode, listSessions, expireSessions } from './lib/sessions.js';
-import { processNextJob, setSendMessageCallback, setDryRunMode, isProcessing, getCurrentSessionCode, cancelJob } from './lib/worker.js';
+import { cancelJob } from './lib/worker.js';
+// Note: Worker logic moved to standalone worker.js process
+
+/**
+ * Check if a job is currently being processed (uses queue state)
+ * @returns {boolean} True if a job is active
+ */
+function isProcessing() {
+  return getActiveJob() !== null;
+}
+
+/**
+ * Get the current session code being processed (uses queue state)
+ * @returns {string|null} Session code or null
+ */
+function getCurrentSessionCode() {
+  const activeJob = getActiveJob();
+  return activeJob?.sessionCode || null;
+}
 import { startupCleanup } from './lib/resources.js';
 import { getBusyMessage, getStatusMessage } from './lib/busy-handler.js';
 
@@ -22,8 +40,6 @@ const LOCK_FILE = join(WORKSPACE, 'bot.lock');
 const SESSION_EXPIRY_INTERVAL_MS = 60 * 60 * 1000;
 // Session max age: 24 hours (in ms)
 const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-// Queue processing interval: 1 second
-const QUEUE_PROCESS_INTERVAL_MS = 1000;
 // WhatsApp message character limit
 const WHATSAPP_MESSAGE_LIMIT = 4000;
 // Retry delay between send attempts (ms)
@@ -143,13 +159,7 @@ async function safeSendMessage(chatId, message, retries = 3) {
   }
 }
 
-// Register the send callback with the worker
-setSendMessageCallback(safeSendMessage);
-
-// Set dry-run mode in worker if enabled
-if (DRY_RUN) {
-  setDryRunMode(true);
-}
+// Note: Worker callback registration moved to standalone worker.js
 
 // ============================================
 // Client Event Handlers
@@ -533,25 +543,11 @@ function getSessionAge(createdAt) {
 }
 
 // ============================================
-// Queue Processing
-// ============================================
-
-/**
- * Process next job from queue if not busy
- */
-async function processQueue() {
-  if (!isProcessing()) {
-    await processNextJob();
-  }
-}
-
-// ============================================
 // Startup and Bot Initialization
 // ============================================
 
 let readyFired = false;
 let botStarted = false;
-let queueInterval = null;
 let sessionExpiryInterval = null;
 let pollingInterval = null;
 
@@ -562,13 +558,11 @@ async function startBot() {
   const mode = DRY_RUN ? 'DRY-RUN' : 'LIVE';
   console.log(`\nMode: ${mode}`);
   console.log('Starting message polling...');
+  console.log('Note: Job processing handled by worker.js');
   console.log('Commands: /claude, /help, /status, /sessions, /research, /github, /x, /youtube, /email, /schedule\n');
 
   // Start polling for messages
   pollingInterval = setInterval(pollForMessages, POLLING_INTERVAL_MS);
-
-  // Start queue processing interval (every 1 second)
-  queueInterval = setInterval(processQueue, QUEUE_PROCESS_INTERVAL_MS);
 
   // Start session expiry interval (every hour)
   sessionExpiryInterval = setInterval(() => {
@@ -626,7 +620,6 @@ function cleanup() {
 
   // Clear intervals
   if (pollingInterval) clearInterval(pollingInterval);
-  if (queueInterval) clearInterval(queueInterval);
   if (sessionExpiryInterval) clearInterval(sessionExpiryInterval);
 
   // Release lock

@@ -19,13 +19,52 @@ BOT_LOG="/tmp/whatsapp-bot.log"
 WEBHOOK_LOG="/tmp/webhook-server.log"
 NOTIFY_LOG="/tmp/notification-monitor.log"
 IMESSAGE_LOG="/tmp/imessage-bot.log"
+WORKER_LOG="/tmp/worker.log"
+TAILSCALE_FUNNEL_LOG="/tmp/tailscale-funnel.log"
+TAILSCALE_CLI="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 
 # Use absolute path for sleep to avoid shell issues
 SLEEP="/bin/sleep"
 
+# Stop Tailscale funnel
+stop_funnel() {
+    echo "Stopping Tailscale funnel..."
+    "$TAILSCALE_CLI" funnel reset 2>/dev/null || true
+    pkill -f "Tailscale.*funnel" 2>/dev/null || true
+}
+
+# Start Tailscale funnel for webhook server
+start_funnel() {
+    echo "Starting Tailscale funnel on port 3000..."
+
+    # Reset any existing funnel config
+    "$TAILSCALE_CLI" funnel reset 2>/dev/null || true
+    $SLEEP 1
+
+    # Start funnel in background
+    nohup "$TAILSCALE_CLI" funnel 3000 > "$TAILSCALE_FUNNEL_LOG" 2>&1 &
+    local pid=$!
+
+    $SLEEP 2
+
+    # Check if funnel started successfully
+    if grep -q "Available on the internet" "$TAILSCALE_FUNNEL_LOG" 2>/dev/null; then
+        local url=$(grep -o "https://[^ ]*" "$TAILSCALE_FUNNEL_LOG" | head -1)
+        echo "Tailscale funnel started: $url"
+        return 0
+    else
+        echo "WARNING: Tailscale funnel may not have started correctly"
+        echo "Check $TAILSCALE_FUNNEL_LOG for details"
+        return 1
+    fi
+}
+
 # Kill all bot-related processes from ALL managers
 kill_all() {
     echo "Stopping all process managers..."
+
+    # Stop Tailscale funnel first
+    stop_funnel
 
     # Stop PM2 processes
     if command -v npx &> /dev/null; then
@@ -33,10 +72,12 @@ kill_all() {
         npx pm2 stop webhook-server 2>/dev/null || true
         npx pm2 stop notification-monitor 2>/dev/null || true
         npx pm2 stop imessage-bot 2>/dev/null || true
+        npx pm2 stop worker 2>/dev/null || true
         npx pm2 delete whatsapp-bot 2>/dev/null || true
         npx pm2 delete webhook-server 2>/dev/null || true
         npx pm2 delete notification-monitor 2>/dev/null || true
         npx pm2 delete imessage-bot 2>/dev/null || true
+        npx pm2 delete worker 2>/dev/null || true
     fi
 
     # Unload launchd if loaded
@@ -47,17 +88,20 @@ kill_all() {
     pkill -9 -f "node.*webhook-server" 2>/dev/null || true
     pkill -9 -f "node.*notification-monitor" 2>/dev/null || true
     pkill -9 -f "node.*imessage-bot" 2>/dev/null || true
+    pkill -9 -f "node worker.js" 2>/dev/null || true
 
     # Also kill by finding PIDs directly
     pgrep -f "whatsapp-bot" | xargs kill -9 2>/dev/null || true
     pgrep -f "webhook-server" | xargs kill -9 2>/dev/null || true
     pgrep -f "notification-monitor" | xargs kill -9 2>/dev/null || true
     pgrep -f "imessage-bot" | xargs kill -9 2>/dev/null || true
+    pgrep -f "node worker.js" | xargs kill -9 2>/dev/null || true
 
     # Remove lock files
     rm -f "$WORKSPACE/bot.lock"
     rm -f "$WORKSPACE/notification-monitor.lock"
     rm -f "$WORKSPACE/imessage-bot.lock"
+    rm -f "$WORKSPACE/worker.lock"
 
     # Wait for processes to die
     $SLEEP 1
@@ -65,10 +109,10 @@ kill_all() {
 
 # Verify no processes are running
 verify_stopped() {
-    local count=$(pgrep -f "whatsapp-bot|webhook-server|notification-monitor|imessage-bot" 2>/dev/null | wc -l)
+    local count=$(pgrep -f "whatsapp-bot|webhook-server|notification-monitor|imessage-bot|node worker.js" 2>/dev/null | wc -l)
     if [ "$count" -gt 0 ]; then
         echo "Warning: Some processes still running, force killing..."
-        pgrep -f "whatsapp-bot|webhook-server|notification-monitor|imessage-bot" | xargs kill -9 2>/dev/null || true
+        pgrep -f "whatsapp-bot|webhook-server|notification-monitor|imessage-bot|node worker.js" | xargs kill -9 2>/dev/null || true
         $SLEEP 1
     fi
 }
@@ -76,6 +120,7 @@ verify_stopped() {
 # Start services via PM2 (production mode with auto-restart)
 start_pm2() {
     local mode="$1"  # "" for live, "--dry-run" for test
+    local universal="$2"  # "--universal" for universal iMessage access
 
     cd "$WORKSPACE"
 
@@ -114,6 +159,9 @@ start_pm2() {
         return 1
     fi
 
+    # Start Tailscale funnel
+    start_funnel || echo "Continuing without funnel..."
+
     # Start notification-monitor via PM2
     if [ -z "$mode" ]; then
         npx pm2 start notification-monitor.js --name notification-monitor --output "$NOTIFY_LOG" --error "$NOTIFY_LOG" -- --live
@@ -125,13 +173,32 @@ start_pm2() {
     $SLEEP 2
 
     # Start imessage-bot via PM2
-    if [ -z "$mode" ]; then
-        npx pm2 start imessage-bot.js --name imessage-bot --output "$IMESSAGE_LOG" --error "$IMESSAGE_LOG"
-    else
-        npx pm2 start imessage-bot.js --name imessage-bot --output "$IMESSAGE_LOG" --error "$IMESSAGE_LOG" -- --dry-run
+    local imessage_args=""
+    if [ -n "$mode" ]; then
+        imessage_args="--dry-run"
+    fi
+    if [ -n "$universal" ]; then
+        imessage_args="$imessage_args --universal"
     fi
 
-    echo "Started imessage-bot.js via PM2"
+    if [ -z "$imessage_args" ]; then
+        npx pm2 start imessage-bot.js --name imessage-bot --output "$IMESSAGE_LOG" --error "$IMESSAGE_LOG"
+    else
+        npx pm2 start imessage-bot.js --name imessage-bot --output "$IMESSAGE_LOG" --error "$IMESSAGE_LOG" -- $imessage_args
+    fi
+
+    echo "Started imessage-bot.js via PM2 (args: ${imessage_args:-none})"
+    $SLEEP 2
+
+    # Start worker via PM2 (single instance, handles job processing)
+    local worker_args="--debug"
+    if [ -n "$mode" ]; then
+        worker_args="$worker_args --dry-run"
+    fi
+
+    npx pm2 start worker.js --name worker --output "$WORKER_LOG" --error "$WORKER_LOG" -- $worker_args
+
+    echo "Started worker.js via PM2 (args: $worker_args)"
     $SLEEP 2
 
     echo "All services started successfully via PM2"
@@ -208,6 +275,10 @@ start_webhook() {
     fi
 
     echo "webhook-server.js started successfully"
+
+    # Start Tailscale funnel
+    start_funnel || echo "Continuing without funnel..."
+
     return 0
 }
 
@@ -242,9 +313,10 @@ start_notify() {
 # Start imessage-bot manually (no PM2)
 start_imessage() {
     local mode="$1"  # "" for live, "--dry-run" for test
+    local universal="$2"  # "--universal" for universal iMessage access
 
     cd "$WORKSPACE"
-    node imessage-bot.js $mode > "$IMESSAGE_LOG" 2>&1 &
+    node imessage-bot.js $mode $universal > "$IMESSAGE_LOG" 2>&1 &
     local pid=$!
 
     echo "Started imessage-bot.js (PID: $pid)"
@@ -270,13 +342,49 @@ start_imessage() {
     return 0
 }
 
+# Start worker manually (no PM2)
+start_worker() {
+    local mode="$1"  # "" for live, "--dry-run" for test
+
+    cd "$WORKSPACE"
+    local args="--debug"
+    if [ -n "$mode" ]; then
+        args="$args --dry-run"
+    fi
+
+    node worker.js $args > "$WORKER_LOG" 2>&1 &
+    local pid=$!
+
+    echo "Started worker.js (PID: $pid)"
+
+    # Wait for startup
+    $SLEEP 3
+
+    # Verify it's running
+    if ! kill -0 $pid 2>/dev/null; then
+        echo "ERROR: worker.js failed to start!"
+        cat "$WORKER_LOG"
+        return 1
+    fi
+
+    # Verify it acquired the lock (not "already running")
+    if grep -q "already running\|Failed to acquire lock" "$WORKER_LOG"; then
+        echo "ERROR: Another worker instance was already running!"
+        cat "$WORKER_LOG"
+        return 1
+    fi
+
+    echo "worker.js started successfully"
+    return 0
+}
+
 # Show status from all sources
 show_status() {
     echo "=== PM2 Status ==="
     npx pm2 list 2>/dev/null || echo "PM2 not available"
     echo ""
     echo "=== Process Status ==="
-    ps aux | grep -E "whatsapp-bot|webhook-server|notification-monitor|imessage-bot" | grep -v grep || echo "No processes running"
+    ps aux | grep -E "whatsapp-bot|webhook-server|notification-monitor|imessage-bot|node worker.js" | grep -v grep || echo "No processes running"
     echo ""
     echo "=== LaunchD Status ==="
     launchctl list 2>/dev/null | grep brokkr || echo "Not loaded"
@@ -295,12 +403,19 @@ case "$1" in
         ;;
 
     start)
-        echo "Starting Brokkr services via PM2 (auto-restart enabled)..."
+        # Check for --universal flag
+        universal_flag=""
+        if [[ "$*" == *"--universal"* ]]; then
+            universal_flag="--universal"
+            echo "Starting Brokkr services via PM2 (auto-restart enabled, universal iMessage access)..."
+        else
+            echo "Starting Brokkr services via PM2 (auto-restart enabled)..."
+        fi
         kill_all
         verify_stopped
         rm -f "$WORKSPACE/bot.lock"
 
-        if ! start_pm2 ""; then
+        if ! start_pm2 "" "$universal_flag"; then
             exit 1
         fi
 
@@ -312,11 +427,22 @@ case "$1" in
         echo "Restarting Brokkr services..."
         $0 stop
         $SLEEP 2
-        $0 start
+        if [[ "$*" == *"--universal"* ]]; then
+            $0 start --universal
+        else
+            $0 start
+        fi
         ;;
 
     live)
-        echo "Starting in LIVE mode (manual, no auto-restart)..."
+        # Check for --universal flag
+        universal_flag=""
+        if [[ "$*" == *"--universal"* ]]; then
+            universal_flag="--universal"
+            echo "Starting in LIVE mode (manual, no auto-restart, universal iMessage access)..."
+        else
+            echo "Starting in LIVE mode (manual, no auto-restart)..."
+        fi
         kill_all
         verify_stopped
 
@@ -332,7 +458,11 @@ case "$1" in
             exit 1
         fi
 
-        if ! start_imessage ""; then
+        if ! start_imessage "" "$universal_flag"; then
+            exit 1
+        fi
+
+        if ! start_worker ""; then
             exit 1
         fi
 
@@ -358,6 +488,10 @@ case "$1" in
         fi
 
         if ! start_imessage "--dry-run"; then
+            exit 1
+        fi
+
+        if ! start_worker "--dry-run"; then
             exit 1
         fi
 
@@ -397,6 +531,13 @@ case "$1" in
         else
             tail -30 "$IMESSAGE_LOG" 2>/dev/null || echo "No log file"
         fi
+        echo ""
+        echo "=== Worker Log (last 30 lines) ==="
+        if npx pm2 show worker &>/dev/null; then
+            npx pm2 logs worker --lines 30 --nostream 2>/dev/null || tail -30 "$WORKER_LOG" 2>/dev/null || echo "No log file"
+        else
+            tail -30 "$WORKER_LOG" 2>/dev/null || echo "No log file"
+        fi
         ;;
 
     tail)
@@ -404,14 +545,14 @@ case "$1" in
         if npx pm2 list 2>/dev/null | grep -q "whatsapp-bot"; then
             npx pm2 logs
         else
-            tail -f "$BOT_LOG" "$WEBHOOK_LOG" "$NOTIFY_LOG" "$IMESSAGE_LOG" 2>/dev/null
+            tail -f "$BOT_LOG" "$WEBHOOK_LOG" "$NOTIFY_LOG" "$IMESSAGE_LOG" "$WORKER_LOG" 2>/dev/null
         fi
         ;;
 
     *)
         echo "Brokkr Bot Control Script"
         echo ""
-        echo "Usage: $0 {stop|start|restart|live|test|status|logs|tail}"
+        echo "Usage: $0 {stop|start|restart|live|test|status|logs|tail} [--universal]"
         echo ""
         echo "Commands:"
         echo "  stop     - Stop all services (PM2, launchd, and manual processes)"
@@ -422,6 +563,15 @@ case "$1" in
         echo "  status   - Show running processes and health"
         echo "  logs     - Show last 30 lines of logs"
         echo "  tail     - Follow logs in real-time"
+        echo ""
+        echo "Options:"
+        echo "  --universal  Enable universal iMessage access (all contacts, not just Tommy)"
+        echo "               Works with: start, live"
+        echo ""
+        echo "Examples:"
+        echo "  $0 start              - Start with Tommy-only iMessage access"
+        echo "  $0 start --universal  - Start with universal iMessage access"
+        echo "  $0 live --universal   - Debug mode with universal access"
         echo ""
         echo "Process Managers:"
         echo "  PM2      - Used by 'start' command, provides auto-restart"

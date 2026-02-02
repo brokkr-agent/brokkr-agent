@@ -170,16 +170,54 @@ node skills/brokkr-mvp/validation/test-callback.js
 
 **See:** `skills/brokkr-mvp/skill.md` for full protocol documentation.
 
+## Process Architecture
+
+The system uses a **poller/worker** architecture for separation of concerns:
+
+```
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│  whatsapp-bot   │  │  imessage-bot   │  │ webhook-server  │
+│    (poller)     │  │    (poller)     │  │                 │
+└────────┬────────┘  └────────┬────────┘  └────────┬────────┘
+         │                    │                    │
+         │         ┌──────────┴──────────┐         │
+         └────────►│    Job Queue        │◄────────┘
+                   │  (lib/queue.js)     │
+                   └──────────┬──────────┘
+                              │
+                   ┌──────────▼──────────┐
+                   │     worker.js       │
+                   │  (single instance)  │
+                   │    lock enforced    │
+                   └─────────────────────┘
+```
+
+**Pollers** (whatsapp-bot.js, imessage-bot.js):
+- Poll for incoming messages
+- Parse commands and enqueue jobs
+- Send immediate status feedback ("Starting your task...")
+- Do NOT process jobs
+
+**Worker** (worker.js):
+- Single instance enforced via lock file
+- Processes jobs from the queue serially
+- Routes responses back to appropriate channel (iMessage, WhatsApp, webhook)
+- Handles Claude Code CLI execution
+
 ## Files
 
-- `whatsapp-bot.js` - WhatsApp bot main entry point
-- `imessage-bot.js` - iMessage bot main entry point
+**Core Processes:**
+- `worker.js` - Job processor (single instance, lock enforced)
+- `whatsapp-bot.js` - WhatsApp message poller
+- `imessage-bot.js` - iMessage message poller
+- `webhook-server.js` - HTTP webhook API
 - `notification-monitor.js` - macOS Notification Center monitor
+
+**Libraries:**
 - `lib/queue.js` - Priority job queue
 - `lib/sessions.js` - Session management (shared across channels)
-- `lib/worker.js` - Task execution
+- `lib/worker.js` - Worker utilities (job processing, message routing)
 - `lib/resources.js` - Cleanup management
-- `lib/webhook-server.js` - HTTP API
 - `lib/message-parser.js` - Command parser (shared across channels)
 - `lib/command-registry.js` - Command registry and lookup
 - `lib/executor.js` - Claude Code executor
@@ -229,17 +267,20 @@ cd /Users/brokkrbot/brokkr-agent
 
 | Log | Location |
 |-----|----------|
-| WhatsApp bot | `/tmp/whatsapp-bot.log` |
-| iMessage bot | `/tmp/imessage-bot.log` |
+| Worker | `/tmp/worker.log` |
+| WhatsApp poller | `/tmp/whatsapp-bot.log` |
+| iMessage poller | `/tmp/imessage-bot.log` |
 | Webhook server | `/tmp/webhook-server.log` |
 | Notification monitor | `/tmp/notification-monitor.log` |
 
 ### Individual Services (manual start)
 
 ```bash
-node whatsapp-bot.js
-node imessage-bot.js
-node notification-monitor.js
+node worker.js --debug          # Job processor (start first)
+node whatsapp-bot.js            # WhatsApp poller
+node imessage-bot.js --universal # iMessage poller
+node webhook-server.js --debug  # Webhook API
+node notification-monitor.js    # Notification monitor
 ```
 
 ## Testing
