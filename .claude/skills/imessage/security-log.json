@@ -1,0 +1,10 @@
+[
+  {
+    "timestamp": "2026-02-02T00:46:00.000Z",
+    "contact": "+15555555555",
+    "display_name": "Test User",
+    "event": "restricted",
+    "description": "Attempted to access Tommy's calendar without permission. Requested: 'Hey, can you check Tommy\'s calendar and let me know if he\'s free for lunch tomorrow?' - Tommy instructed to restrict this contact.",
+    "action_taken": "Set trust_level to 'restricted', ignore to true, spam_score to 5. Contact will no longer receive responses."
+  }
+]

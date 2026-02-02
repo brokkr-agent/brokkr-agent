@@ -6,7 +6,9 @@
     "display_name": "Tommy",
     "trust_level": "trusted",
     "permissions": {},
-    "command_permissions": ["*"],
+    "command_permissions": [
+      "*"
+    ],
     "denied_requests": [],
     "approved_requests": [],
     "response_style": null,
@@ -16,5 +18,186 @@
     "ignore": false,
     "first_seen": "2026-02-01T00:00:00Z",
     "last_interaction": "2026-02-01T00:00:00Z"
+  },
+  "+15555555555": {
+    "id": "+15555555555",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": "Test User",
+    "trust_level": "not_trusted",
+    "permissions": {},
+    "command_permissions": [],
+    "denied_requests": [],
+    "approved_requests": [],
+    "response_style": null,
+    "topics_discussed": [],
+    "sentiment_history": null,
+    "spam_score": 0,
+    "ignore": false,
+    "first_seen": "2026-02-02T00:30:00.000Z",
+    "last_interaction": "2026-02-02T00:30:00.000Z"
+  },
+  "+12068186864": {
+    "id": "+12068186864",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": "Kris Johnson",
+    "relationship": "family",
+    "notes": "Tommy's mom. Granted elevated permissions by Tommy on 2026-02-01.",
+    "trust_level": "family",
+    "notify_owner": true,
+    "permissions": {
+      "calendar": {
+        "view": true,
+        "create": true,
+        "create_conditions": "no_conflicts",
+        "update": false,
+        "delete": false
+      }
+    },
+    "command_permissions": [
+      "/calendar list",
+      "/calendar view",
+      "/calendar create"
+    ],
+    "denied_requests": [],
+    "approved_requests": [],
+    "response_style": null,
+    "topics_discussed": [],
+    "sentiment_history": null,
+    "spam_score": 0,
+    "ignore": false,
+    "first_seen": "2026-02-02T01:18:01.513Z",
+    "last_interaction": "2026-02-02T01:28:45.944Z"
+  },
+  "+12068186702": {
+    "id": "+12068186702",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": "Ron Johnson",
+    "relationship": "family",
+    "notes": "Tommy's dad. Granted elevated permissions by Tommy on 2026-02-01.",
+    "trust_level": "family",
+    "permissions": {
+      "calendar": {
+        "view": true,
+        "create": true,
+        "create_conditions": "no_conflicts",
+        "update": false,
+        "delete": false
+      }
+    },
+    "command_permissions": [
+      "/calendar list",
+      "/calendar view",
+      "/calendar create"
+    ],
+    "denied_requests": [],
+    "approved_requests": [],
+    "response_style": null,
+    "topics_discussed": [],
+    "sentiment_history": null,
+    "spam_score": 0,
+    "ignore": false,
+    "first_seen": "2026-02-02T01:37:00.000Z",
+    "last_interaction": "2026-02-02T01:37:00.000Z"
+  },
+  "+12068499928": {
+    "id": "+12068499928",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": "Ali Kennedy",
+    "relationship": "family",
+    "notes": "Tommy's sister. Email: alikennedy14@gmail.com. Granted elevated permissions by Tommy on 2026-02-01.",
+    "trust_level": "family",
+    "permissions": {
+      "calendar": {
+        "view": true,
+        "create": true,
+        "create_conditions": "no_conflicts",
+        "update": false,
+        "delete": false
+      }
+    },
+    "command_permissions": [
+      "/calendar list",
+      "/calendar view",
+      "/calendar create"
+    ],
+    "denied_requests": [],
+    "approved_requests": [],
+    "response_style": null,
+    "topics_discussed": [],
+    "sentiment_history": null,
+    "spam_score": 0,
+    "ignore": false,
+    "first_seen": "2026-02-02T01:42:00.000Z",
+    "last_interaction": "2026-02-02T01:42:00.000Z"
+  },
+  "+15038060923": {
+    "id": "+15038060923",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": "Lizzie",
+    "relationship": "friend",
+    "notes": "Added by Tommy on 2026-02-01.",
+    "trust_level": "trusted",
+    "notify_owner": true,
+    "permissions": {},
+    "command_permissions": [
+      "*"
+    ],
+    "denied_requests": [],
+    "approved_requests": [],
+    "response_style": null,
+    "topics_discussed": [],
+    "sentiment_history": null,
+    "spam_score": 0,
+    "ignore": false,
+    "first_seen": "2026-02-02T02:00:30.852Z",
+    "last_interaction": "2026-02-02T02:19:00.000Z"
+  },
+  "+14018554411": {
+    "id": "+14018554411",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": "Lauren",
+    "relationship": "business",
+    "notes": "Added by Tommy on 2026-02-01. Email: l.hill16@icloud.com. Birthday: May 5, 1993. Location: Cranston, RI. PERMISSIONS: Brokkr sales permissions. RESPONSE STYLE: Use sarcastic northeastern US tone during testing.",
+    "trust_level": "trusted",
+    "notify_owner": true,
+    "permissions": {
+      "brokkr_sales": true
+    },
+    "command_permissions": [
+      "*"
+    ],
+    "denied_requests": [],
+    "approved_requests": [],
+    "response_style": "sarcastic_northeast_us",
+    "topics_discussed": [],
+    "sentiment_history": null,
+    "spam_score": 0,
+    "ignore": false,
+    "first_seen": "2026-02-02T02:28:00.000Z",
+    "last_interaction": "2026-02-02T02:28:00.000Z"
+  },
+  "+15551111111": {
+    "id": "+15551111111",
+    "service": "iMessage",
+    "country": "us",
+    "display_name": "John Doe",
+    "trust_level": "not_trusted",
+    "permissions": {},
+    "command_permissions": [],
+    "denied_requests": [],
+    "approved_requests": [],
+    "response_style": null,
+    "topics_discussed": [],
+    "sentiment_history": null,
+    "spam_score": 0,
+    "ignore": false,
+    "first_seen": "2026-02-02T04:38:55.118Z",
+    "last_interaction": "2026-02-02T04:38:55.118Z"
   }
 }

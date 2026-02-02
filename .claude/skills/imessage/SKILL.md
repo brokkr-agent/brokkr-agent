@@ -79,6 +79,22 @@ Send commands from Tommy's phone:
 - `/<xx> allow` - Approve pending request
 - `/<xx> deny` - Deny pending request
 
+## Proactive Problem Solving
+
+**CRITICAL:** When processing messages from Tommy (trusted), ALWAYS be proactive:
+
+1. **Find workable solutions** - Don't say "I can't access that". Use the scripts below to GET the context you need.
+2. **Cross-chat context** - If Tommy mentions "the group chat" or "last message", use `imessage-recent-all.js` to find it.
+3. **Update contacts** - When Tommy identifies someone (e.g., "that was from my mom Kris"), update contacts.json immediately.
+4. **No dead ends** - If one approach fails, try another. Use the lib functions directly if scripts don't exist.
+
+### Example: Tommy says "That last message in the group chat was from my mom"
+1. Run `node .claude/skills/imessage/scripts/imessage-recent-all.js 30` to see recent messages across ALL chats
+2. Identify the group chat and the message Tommy is referring to
+3. Look up the sender's phone number from the message
+4. Update contacts.json to set `display_name: "Kris Johnson"` (or whatever name Tommy provided)
+5. Confirm back to Tommy what you did
+
 ## Additional Context Tools
 
 Location for scripts: `.claude/skills/imessage/scripts/`
@@ -89,9 +105,13 @@ When the pre-injected 10 messages aren't enough, use these tools:
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
-| `imessage-history.js` | Extended message history | `node .claude/skills/imessage/scripts/imessage-history.js +1555... 50` |
+| `imessage-recent-all.js` | Recent messages from ALL chats | `node .claude/skills/imessage/scripts/imessage-recent-all.js 30` |
+| `imessage-list-groups.js` | List all group chats with GUIDs | `node .claude/skills/imessage/scripts/imessage-list-groups.js 10` |
+| `imessage-group.js` | Get messages from specific group | `node .claude/skills/imessage/scripts/imessage-group.js "chat-guid" 20` |
+| `imessage-update-contact.js` | Update contact info | `node .claude/skills/imessage/scripts/imessage-update-contact.js "+1555..." display_name "Name"` |
+| `imessage-history.js` | Extended history for one contact | `node .claude/skills/imessage/scripts/imessage-history.js +1555... 50` |
 | `imessage-search.js` | Search conversations | `node .claude/skills/imessage/scripts/imessage-search.js +1555... "keyword"` |
-| `imessage-group.js` | Group chat context | `node .claude/skills/imessage/scripts/imessage-group.js "chat-guid"` |
+| `imessage-extract-vcard.js` | Extract contact from vCard attachment | `node .claude/skills/imessage/scripts/imessage-extract-vcard.js --recent 5` |
 | `log-suspicious.js` | Log security concerns | `node .claude/skills/imessage/scripts/log-suspicious.js "+1555..." "description"` |
 
 ### Available Library Functions

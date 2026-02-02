@@ -1,17 +1,29 @@
 {
   "sessions": [
     {
-      "code": "fq",
+      "code": "de",
       "type": "whatsapp",
       "task": "Persist test",
       "chatId": null,
       "source": null,
-      "sessionId": "session-ml3lz3vv-i573jz",
+      "sessionId": "session-ml4ojqgd-ea0gff",
       "claudeSessionId": null,
-      "createdAt": "2026-02-01T10:39:07.627Z",
-      "lastActivity": "2026-02-01T10:39:07.627Z",
+      "createdAt": "2026-02-02T04:38:55.405Z",
+      "lastActivity": "2026-02-02T04:38:55.405Z",
+      "status": "active"
+    },
+    {
+      "code": "uq",
+      "type": "imessage",
+      "task": "Have you messaged ali?",
+      "chatId": "+12069090025",
+      "source": null,
+      "sessionId": "session-ml4otgdh-grgq82",
+      "claudeSessionId": "1adb59f6-77b2-43b7-85d5-1cf2d19293e3",
+      "createdAt": "2026-02-02T04:46:28.901Z",
+      "lastActivity": "2026-02-02T04:47:08.059Z",
       "status": "active"
     }
   ],
-  "lastUpdated": "2026-02-01T10:39:07.627Z"
+  "lastUpdated": "2026-02-02T04:47:08.059Z"
 }

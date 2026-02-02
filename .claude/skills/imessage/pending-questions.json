@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "sessionCode": "17",
+    "phoneNumber": "+15551111111",
+    "question": "What is the weather?",
+    "context": "Test context",
+    "status": "pending",
+    "createdAt": "2026-02-02T04:38:55.119Z",
+    "resolvedAt": null,
+    "response": null
+  }
+]

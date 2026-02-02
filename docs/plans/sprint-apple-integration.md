@@ -22,7 +22,7 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 
 | Plan | Status | Dependencies | Est. Tasks |
 |------|--------|--------------|------------|
-| [Apple Notifications](./2026-02-01-apple-notification-integration-plan.md) | Not Started | None | 11 |
+| [Apple Notifications](./2026-02-01-apple-notification-integration-plan.md) | ✅ Implemented | None | 11 |
 
 ### Phase 3: Core Apple Apps
 
