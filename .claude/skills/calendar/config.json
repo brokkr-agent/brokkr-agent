@@ -1,14 +1,20 @@
 {
   "name": "calendar",
-  "version": "0.1.0",
-  "status": "placeholder",
+  "version": "1.0.0",
+  "status": "implemented",
   "description": "Apple Calendar integration for event management",
   "capabilities": [
+    "list-calendars",
+    "list-today",
+    "list-week",
     "list-events",
     "create-event",
-    "update-event",
+    "find-event",
+    "modify-event",
     "delete-event",
-    "handle-reminders"
+    "check-conflicts",
+    "add-alarm",
+    "handle-notification"
   ],
   "dependencies": {
     "applescript": true,
