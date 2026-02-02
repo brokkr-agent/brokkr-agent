@@ -949,35 +949,32 @@ function getSessionAge(createdAt) {
 }
 
 // ============================================
-// Queue Processing
+// NOTE: Queue Processing is handled by worker.js
 // ============================================
-
-async function processQueue() {
-  if (!isProcessing()) {
-    await processNextJob();
-  }
-}
+// The poller (imessage-bot.js) does NOT process jobs.
+// It only polls for messages, parses commands, and enqueues jobs.
+// A separate worker.js process handles all job processing.
+// See: worker.js (standalone single-instance job processor)
 
 // ============================================
 // Startup
 // ============================================
 
 let pollingInterval = null;
-let queueInterval = null;
 let sessionExpiryInterval = null;
 
 async function startBot() {
   const mode = DRY_RUN ? 'DRY-RUN' : 'LIVE';
-  console.log(`\n[iMessage Bot] Mode: ${mode}`);
-  console.log(`[iMessage Bot] Monitoring: ${TOMMY_PHONE}`);
-  console.log('[iMessage Bot] Starting message polling...');
-  console.log('[iMessage Bot] Commands: /claude, /help, /status, /sessions, /research, /github, /x, /youtube, /email, /schedule\n');
+  console.log(`\n[iMessage Poller] Mode: ${mode}`);
+  console.log(`[iMessage Poller] Monitoring: ${TOMMY_PHONE}`);
+  console.log('[iMessage Poller] Starting message polling...');
+  console.log('[iMessage Poller] Note: Job processing handled by worker.js');
+  console.log('[iMessage Poller] Commands: /claude, /help, /status, /sessions, /research, /github, /x, /youtube, /email, /schedule\n');
 
-  // Start polling
+  // Start polling (poller only detects and enqueues)
   pollingInterval = setInterval(pollForMessages, POLLING_INTERVAL_MS);
 
-  // Start queue processing
-  queueInterval = setInterval(processQueue, QUEUE_PROCESS_INTERVAL_MS);
+  // NOTE: No queue processing here - that's worker.js responsibility
 
   // Start session expiry
   sessionExpiryInterval = setInterval(() => {

@@ -11,8 +11,8 @@
 > ls -la lib/imessage-reader.js lib/imessage-sender.js imessage-bot.js
 > # Run base skill tests
 > npm test -- imessage
-> # Verify bot starts without errors
-> node imessage-bot.js --dry-run
+> # Verify poller/worker processes are running (do NOT start new instances)
+> ps aux | grep -E "worker.js|imessage-bot" | grep -v grep
 > ```
 
 **Goal:** Transform the iMessage bot from a Tommy-only command processor into a general-purpose AI assistant ("Brokkr") accessible to any iMessage contact, with self-expanding permissions, silent consultation for untrusted contacts, and group conversation awareness.
@@ -2717,12 +2717,16 @@ allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ```
 
 ### Via Bot (Automatic)
-```bash
-# Standard mode (Tommy only, commands only)
-node imessage-bot.js
 
-# Universal mode (all contacts, natural conversation)
-node imessage-bot.js --universal
+**Note:** Bot processes are managed by `scripts/bot-control.sh`, NOT started from SKILL.md.
+The poller (`imessage-bot.js`) and worker (`worker.js`) are already running when Claude reads this skill.
+
+```bash
+# Check process status (do NOT start from here)
+./scripts/bot-control.sh status
+
+# Start/restart is done via bot-control, not SKILL.md
+# ./scripts/bot-control.sh start --universal
 ```
 
 ## Commands

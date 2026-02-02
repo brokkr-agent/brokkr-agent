@@ -2120,14 +2120,14 @@ git commit -m "feat(email): add skill executor for command routing"
 
 ---
 
-## Task 13: Update skill.md with Automation Examples
+## Task 13: Update SKILL.md with Automation Examples
 
 **Files:**
-- Modify: `skills/email/skill.md`
+- Modify: `skills/email/SKILL.md`
 
 **Step 1: Add automation section**
 
-Append to skill.md:
+Append to SKILL.md:
 
 ```markdown
 
@@ -2208,7 +2208,7 @@ Message IDs are unique but temporary. After moving/deleting, the ID changes. Alw
 **Step 2: Commit**
 
 ```bash
-git add skills/email/skill.md
+git add skills/email/SKILL.md
 git commit -m "docs(email): add automation capabilities and troubleshooting"
 ```
 
@@ -2292,7 +2292,7 @@ git commit -m "feat(email): complete Apple Mail integration"
 
 | Task | Files | Description |
 |------|-------|-------------|
-| 1 | `skills/email/skill.md`, `config.json` | Skill structure |
+| 1 | `skills/email/SKILL.md`, `config.json` | Skill structure |
 | 2 | `skills/email/list-inbox.scpt`, `test-scripts.js` | List inbox |
 | 3 | `skills/email/read-message.scpt` | Read message |
 | 4 | `skills/email/compose.scpt` | Compose email |
@@ -2304,7 +2304,7 @@ git commit -m "feat(email): complete Apple Mail integration"
 | 10 | `skills/email/handler.js`, `tests/email-handler.test.js` | Handler module |
 | 11 | `.brokkr/commands/email/command.json` | Command registration |
 | 12 | `skills/email/executor.js` | Skill executor |
-| 13 | `skills/email/skill.md` | Automation docs |
+| 13 | `skills/email/SKILL.md` | Automation docs |
 | 14 | `CLAUDE.md` | Documentation |
 | 15 | - | Integration test |
 

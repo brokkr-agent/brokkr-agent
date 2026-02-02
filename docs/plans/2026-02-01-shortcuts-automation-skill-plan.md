@@ -240,14 +240,14 @@ All commands registered in `lib/builtin-commands.js` using `CommandFactory.skill
 
 ### Focus Mode Bridge Strategy
 
-Rather than directly reading JSON files (fragile, requires Full Disk Access), create a Shortcuts automation:
+Focus modes are read via JXA (JavaScript for Automation) by parsing macOS system files:
 
-1. Create shortcut "Get Focus for Brokkr" in Shortcuts app
-2. Use Shortcuts' built-in "Get current focus" action (if available in Shortcuts actions)
-3. Run via AppleScript when `/focus` command invoked
-4. If Shortcuts doesn't have native Focus action, fall back to JXA script
+1. JXA script reads `~/Library/DoNotDisturb/DB/Assertions.json`
+2. JXA script reads `~/Library/DoNotDisturb/DB/ModeConfigurations.json`
+3. Parses configurations to determine active Focus mode
+4. Requires Full Disk Access permission for Terminal
 
-**Benefit:** Cleaner, less fragile, no direct file parsing
+**Benefit:** Direct, reliable, no dependency on Shortcuts app for this feature
 
 ### Location Bridge Setup
 

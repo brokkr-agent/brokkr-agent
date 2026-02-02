@@ -8,7 +8,7 @@
 
 **Goal:** Formalize Chrome browser automation capabilities into a reusable skill with efficient patterns for page navigation, content extraction, form interaction, screenshot capture, and session management. This skill provides programmatic web automation for Brokkr agent tasks.
 
-**Architecture:** Create a Puppeteer-based skill that leverages the existing Chrome installation (already used by WhatsApp bot). Uses browser contexts for session isolation, allowing WhatsApp and agent tasks to coexist without conflicts. Provides reusable JavaScript modules for common patterns (navigation, forms, extraction) with robust error handling and retry logic. Skill scripts are invoked via Node.js from worker.js.
+**Architecture:** Create a Puppeteer-based skill that leverages the existing Chrome installation (already used by WhatsApp bot). Uses browser contexts for session isolation, allowing WhatsApp and agent tasks to coexist without conflicts. Provides reusable JavaScript modules for common patterns (navigation, forms, extraction) with robust error handling and retry logic. Skill modules are loaded by Claude during job execution via the worker process.
 
 **Tech Stack:** Puppeteer (whatsapp-web.js already includes this), Node.js, existing Chrome "for Testing" installation, shared browser instance with isolated contexts
 
