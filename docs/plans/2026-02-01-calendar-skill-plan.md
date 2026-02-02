@@ -12,6 +12,37 @@
 
 ---
 
+## Implementation Status: ✅ COMPLETE
+
+**Completed:** 2026-02-01
+
+| Task | Status | Notes |
+|------|--------|-------|
+| 1. List Calendars Script | ✅ Complete | `list-calendars.scpt` - returns all calendars with name, type, writable |
+| 2. List Events Scripts | ✅ Complete | `list-today.scpt`, `list-week.scpt`, `list-events.scpt` |
+| 3. Create Event Script | ✅ Complete | `create-event.scpt` - full event creation with all properties |
+| 4. Find Event Script | ✅ Complete | `find-event.scpt` - UID exact match, summary partial match |
+| 5. Modify Event Script | ✅ Complete | `modify-event.scpt` - delete-and-recreate strategy |
+| 6. Delete Event Script | ✅ Complete | `delete-event.scpt` - delete by UID |
+| 7. Check Conflicts Script | ✅ Complete | `check-conflicts.scpt` - scheduling conflict detection |
+| 8. Add Alarm Script | ✅ Complete | `add-alarm.scpt` - display/sound/email alarms |
+| 9. Node.js Wrapper Module | ✅ Complete | `lib/calendar.js` - exports all functions |
+| 10. Skill Documentation | ✅ Complete | `SKILL.md` updated with full API docs |
+| 11. Integration Testing | ✅ Complete | All scripts verified working |
+| 12. Sprint Status Update | ✅ Complete | Marked as implemented in sprint |
+
+**Commits:**
+- `806c68f` feat(calendar): add list-calendars script
+- `04d0748` feat(calendar): add list-events scripts (today, week, range)
+- `ed695f9` feat(calendar): add create-event script
+- `2bef3d9` feat(calendar): add find-event script
+- `65c5160` feat(calendar): add delete-event script
+- `ee9b903` feat(calendar): add remaining AppleScript files
+- `dcf1821` docs(calendar): update SKILL.md and config.json
+- `3b653d0` docs(sprint): mark Calendar Skill as implemented
+
+---
+
 ## Standardized Skill Structure
 
 ```
