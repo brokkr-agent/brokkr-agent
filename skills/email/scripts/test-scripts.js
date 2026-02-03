@@ -94,3 +94,14 @@ if (listResult.success && Array.isArray(listResult.data) && listResult.data.leng
 } else {
   console.log('\n[SKIP] reply.scpt - no messages to test with');
 }
+
+// Test search
+const searchResult = runScript('search.scpt', ['@', 'sender', 'all', '5']);
+
+if (searchResult.success && Array.isArray(searchResult.data)) {
+  console.log(`\n[PASS] search.scpt found ${searchResult.data.length} messages`);
+} else if (searchResult.data?.error) {
+  console.log(`\n[FAIL] search.scpt error: ${searchResult.data.error}`);
+} else {
+  console.log('\n[FAIL] search.scpt did not return expected format');
+}
