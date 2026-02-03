@@ -74,7 +74,7 @@ Use these credentials to log into any service that requires authentication (GitH
 - **Apple Mail**: Read, compose, reply, delete, organize emails
 - **Apple Calendar**: View, create, manage events
 - **Apple Notes**: Create, search, append notes
-- **Apple Reminders**: Create, list, complete reminders
+- **Apple Reminders**: IMPLEMENTED - Create, list, complete, modify, delete reminders
 
 ## Network Access
 
@@ -111,6 +111,25 @@ Same commands as WhatsApp. Send from Tommy's phone (+1 206-909-0025) to the bot'
 
 **Process:** `imessage-bot.js`
 **Log:** `/tmp/imessage-bot.log`
+
+## Reminders Commands
+
+| Command | Description |
+|---------|-------------|
+| `/reminders` | List incomplete reminders |
+| `/reminders due <days>` | List reminders due in next N days |
+| `/reminders create <name> [due-date] [notes]` | Create new reminder |
+| `/reminders complete <id>` | Mark reminder as complete |
+| `/reminders delete <id>` | Delete reminder |
+
+**Example:**
+```
+/reminders create "Call dentist" "2026-02-10 14:00:00" "Schedule checkup"
+```
+
+**Priority Values:** 1=High, 5=Medium, 9=Low
+
+**See:** `.claude/skills/reminders/SKILL.md` for full documentation.
 
 ## Webhook API
 
