@@ -1,0 +1,10 @@
+{
+  "account": "iCloud",
+  "email": "brokkrassist@icloud.com",
+  "batch_size": 50,
+  "auto_triage": false,
+  "urgent_senders": [],
+  "urgent_keywords": ["urgent", "asap", "emergency", "critical", "time-sensitive", "action required"],
+  "timeout_seconds": 600,
+  "icloud_attachments_path": "Attachments"
+}
