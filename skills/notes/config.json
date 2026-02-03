@@ -1,0 +1,22 @@
+{
+  "name": "notes",
+  "version": "1.0.0",
+  "status": "implemented",
+  "notificationTriggers": {
+    "bundleId": "com.apple.Notes",
+    "patterns": ["shared note", "[AGENT]", "@Brokkr"]
+  },
+  "scripts": [
+    "list-folders.scpt",
+    "list-notes.scpt",
+    "list-recent.scpt",
+    "create-note.scpt",
+    "find-note.scpt",
+    "read-note.scpt",
+    "append-note.scpt",
+    "modify-note.scpt",
+    "delete-note.scpt",
+    "search-notes.scpt"
+  ],
+  "module": "lib/notes.js"
+}

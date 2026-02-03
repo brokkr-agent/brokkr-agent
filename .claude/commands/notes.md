@@ -1,34 +1,50 @@
 ---
 name: notes
-description: Manage Apple Notes - create, search, append, list, delete notes
-argument-hint: <action> [args...]
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+description: Manage Notes.app - create, search, read, append, modify notes
+argument-hint: [action] [args...]
+allowed-tools: Read, Write, Edit, Bash, Task
 ---
 
-Load the Notes skill and process: $ARGUMENTS
+Load the notes skill and process: $ARGUMENTS
 
 Context from notification (if triggered by monitor):
 !`cat /tmp/brokkr-notification-context.json 2>/dev/null || echo "{}"`
 
 ## Available Actions
 
-- `create "<title>" --body "<content>"` - Create a new note
-- `search "<query>"` - Search notes by title or content
-- `append "<note-title>" "<content>"` - Append to existing note
-- `list [folder]` - List notes, optionally by folder
-- `get "<note-title>"` - Get full note content
-- `delete "<note-title>"` - Delete a note
+### Listing
+- `folders` - List all folders
+- `list [folder]` - List notes in folder (default: "Notes")
+- `recent [count]` - List recently modified notes (default: 10)
+
+### Reading
+- `find "<query>"` - Find notes by title
+- `read <note-id>` - Read full note content
+- `search "<query>"` - Search notes by content
+
+### Writing
+- `create "<title>" "<body>" [folder]` - Create new note
+- `append <note-id> "<content>"` - Append to existing note
+- `modify <note-id> [--title "..."] [--body "..."]` - Modify note
+
+### Deleting
+- `delete <note-id>` - Delete note (moves to Recently Deleted)
 
 ## Examples
 
 ```
-/notes create "Meeting Notes" --body "Discussed Q1 goals"
-/notes search "project ideas"
-/notes append "Meeting Notes" "Action item: Follow up with Tommy"
+/notes folders
 /notes list
-/notes list "Brokkr"
-/notes get "Meeting Notes"
-/notes delete "Old Draft"
+/notes list "Work"
+/notes recent 5
+/notes create "Meeting Notes" "Discussed Q1 goals"
+/notes create "Project Idea" "New feature concept" "Ideas"
+/notes find "meeting"
+/notes read x-coredata://...
+/notes search "project ideas"
+/notes append x-coredata://... "Action item: Follow up"
+/notes modify x-coredata://... --title "Updated Title"
+/notes delete x-coredata://...
 ```
 
 ## Skill Location
