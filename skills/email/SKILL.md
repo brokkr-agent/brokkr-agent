@@ -58,3 +58,76 @@ Edit `skills/email/config.json` to customize:
 
 See `reference/` directory for detailed docs:
 - `applescript-mail.md` - AppleScript patterns and limitations
+
+## Automation Capabilities
+
+### Auto-Triage
+
+The `/email triage` command scans inbox and identifies urgent messages based on:
+
+1. **Urgent Senders** - Contacts in `config.json` `urgent_senders` array
+2. **Urgent Keywords** - Words like "urgent", "asap", "emergency" in subject
+
+Urgent messages are automatically flagged.
+
+### Configuration for Automation
+
+Edit `skills/email/config.json`:
+
+```json
+{
+  "auto_triage": true,
+  "urgent_senders": [
+    "boss@company.com",
+    "important-client@example.com"
+  ],
+  "urgent_keywords": [
+    "urgent", "asap", "emergency", "critical",
+    "time-sensitive", "action required"
+  ]
+}
+```
+
+### Planned Automations (Phase 7+)
+
+1. **New Email Notification** - When urgent email arrives, notify Tommy via iMessage
+2. **Daily Digest** - Morning summary of important emails
+3. **Auto-Response Drafts** - Generate draft responses for common email types
+4. **Smart Folder Organization** - Auto-move emails to folders based on rules
+
+## AppleScript Reference
+
+All scripts output JSON for easy parsing. Common error format:
+
+```json
+{"error": "Error message here"}
+```
+
+### Script Arguments
+
+| Script | Arguments |
+|--------|-----------|
+| list-inbox.scpt | [max_count:20] |
+| read-message.scpt | message_id |
+| compose.scpt | to, subject, body, [send_now:false] |
+| reply.scpt | message_id, body, [reply_all:false], [send_now:false] |
+| delete.scpt | message_id |
+| search.scpt | query, [field:all], [mailbox:all], [max:20] |
+| flag.scpt | message_id, [set:toggle] |
+| mark-read.scpt | message_id, [read:true] |
+| list-folders.scpt | (none) |
+| move-to-folder.scpt | message_id, folder_name, [account] |
+
+## Troubleshooting
+
+### "Mail got an error: AppleEvent handler failed"
+
+Mail.app may not be running. The scripts will launch it, but first invocation may be slow.
+
+### "Not authorized to send Apple events"
+
+Check System Settings > Privacy & Security > Automation. Terminal needs permission to control Mail.
+
+### "Message ID not found"
+
+Message IDs are unique but temporary. After moving/deleting, the ID changes. Always get fresh IDs from list-inbox.
