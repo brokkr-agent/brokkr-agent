@@ -105,3 +105,14 @@ if (searchResult.success && Array.isArray(searchResult.data)) {
 } else {
   console.log('\n[FAIL] search.scpt did not return expected format');
 }
+
+// Test list-folders
+const foldersResult = runScript('list-folders.scpt', []);
+
+if (foldersResult.success && Array.isArray(foldersResult.data)) {
+  console.log(`\n[PASS] list-folders.scpt returned ${foldersResult.data.length} folders`);
+} else if (foldersResult.data?.error) {
+  console.log(`\n[FAIL] list-folders.scpt error: ${foldersResult.data.error}`);
+} else {
+  console.log('\n[FAIL] list-folders.scpt did not return expected format');
+}
