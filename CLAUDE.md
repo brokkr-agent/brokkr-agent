@@ -69,12 +69,15 @@ Use these credentials to log into any service that requires authentication (GitH
 - **System Notifications**: Monitors macOS Notification Center, triggers actions based on rules
 - **iMessage**: Commands from Tommy via Messages.app, shares session pool with WhatsApp
 
+### Implemented Capabilities (Apple Integration)
+
+- **Apple Mail**: Read, compose, reply, delete, organize emails via AppleScript
+- **Apple Reminders**: Create, list, complete, modify, delete reminders
+
 ### Planned Capabilities (see docs/concepts/)
 
-- **Apple Mail**: Read, compose, reply, delete, organize emails
 - **Apple Calendar**: View, create, manage events
 - **Apple Notes**: Create, search, append notes
-- **Apple Reminders**: IMPLEMENTED - Create, list, complete, modify, delete reminders
 
 ## Network Access
 
@@ -130,6 +133,21 @@ Same commands as WhatsApp. Send from Tommy's phone (+1 206-909-0025) to the bot'
 **Priority Values:** 1=High, 5=Medium, 9=Low
 
 **See:** `.claude/skills/reminders/SKILL.md` for full documentation.
+
+## Email Commands
+
+| Command | Description |
+|---------|-------------|
+| `/email` | Check inbox summary |
+| `/email read <id>` | Read specific message |
+| `/email compose <to> <subject>` | Compose new email |
+| `/email reply <id>` | Reply to message |
+| `/email search <query>` | Search messages |
+| `/email flag <id>` | Toggle message flag |
+| `/email folders` | List mailboxes |
+| `/email triage` | Identify urgent messages |
+
+**See:** `skills/email/SKILL.md` for full documentation.
 
 ## Webhook API
 
