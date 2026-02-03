@@ -73,11 +73,11 @@ Use these credentials to log into any service that requires authentication (GitH
 
 - **Apple Mail**: Read, compose, reply, delete, organize emails via AppleScript
 - **Apple Reminders**: Create, list, complete, modify, delete reminders
+- **Apple Notes**: Create, search, read, append, modify notes via AppleScript
 
 ### Planned Capabilities (see docs/concepts/)
 
 - **Apple Calendar**: View, create, manage events
-- **Apple Notes**: Create, search, append notes
 
 ## Network Access
 
@@ -148,6 +148,22 @@ Same commands as WhatsApp. Send from Tommy's phone (+1 206-909-0025) to the bot'
 | `/email triage` | Identify urgent messages |
 
 **See:** `skills/email/SKILL.md` for full documentation.
+
+## Notes Commands
+
+| Command | Description |
+|---------|-------------|
+| `/notes` | List recent notes |
+| `/notes folders` | List all folders |
+| `/notes list [folder]` | List notes in folder |
+| `/notes create <title> <body>` | Create new note |
+| `/notes read <id>` | Read note content |
+| `/notes find <query>` | Find notes by title |
+| `/notes append <id> <content>` | Append to note |
+| `/notes search <query>` | Search note content |
+| `/notes delete <id>` | Delete note |
+
+**See:** `skills/notes/SKILL.md` for full documentation.
 
 ## Webhook API
 
