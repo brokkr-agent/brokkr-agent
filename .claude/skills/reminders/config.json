@@ -1,35 +1,27 @@
 {
   "name": "reminders",
-  "version": "0.1.0",
-  "status": "placeholder",
-  "description": "Apple Reminders integration for task management",
-  "capabilities": [
-    "list-reminders",
-    "create-reminder",
-    "complete-reminder",
-    "update-reminder",
-    "delete-reminder",
-    "manage-lists"
-  ],
-  "dependencies": {
-    "applescript": true,
-    "icloud-storage": true
-  },
-  "notificationFilter": {
-    "whitelist": {
-      "lists": ["Agent Tasks", "Brokkr"],
-      "content": ["\\[AGENT\\]"]
+  "version": "1.0.0",
+  "description": "Reminders.app integration for Brokkr agent",
+  "scriptsDir": "scripts",
+  "notificationTriggers": {
+    "agentTagged": {
+      "tagPattern": "[AGENT]",
+      "priority": "HIGH"
     },
-    "patterns": [
-      { "match": "due within 1hr", "priority": "HIGH" },
-      { "match": "urgent", "priority": "CRITICAL" }
-    ],
-    "blacklist": {
-      "completed": true
+    "dueSoon": {
+      "hoursBeforeDue": 1,
+      "priority": "NORMAL"
+    },
+    "highPriorityDueToday": {
+      "priorityValue": 1,
+      "priority": "HIGH"
+    },
+    "sharedListUpdate": {
+      "priority": "NORMAL"
     }
   },
-  "icloudPaths": {
-    "exports": "Exports"
-  },
-  "defaultList": "Agent Tasks"
+  "icloudExport": {
+    "category": "exports",
+    "filePrefix": "reminders-export"
+  }
 }
