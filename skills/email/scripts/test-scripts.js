@@ -73,3 +73,24 @@ if (composeResult.success && composeResult.data.status === 'draft') {
 } else {
   console.log('\n[FAIL] compose.scpt did not return expected format');
 }
+
+// Test reply (draft mode only)
+if (listResult.success && Array.isArray(listResult.data) && listResult.data.length > 0) {
+  const firstMsgId = listResult.data[0].id;
+  const replyResult = runScript('reply.scpt', [
+    firstMsgId.toString(),
+    'Thanks for your email. This is a test reply.',
+    'false', // not reply all
+    'false'  // don't send
+  ]);
+
+  if (replyResult.success && replyResult.data.status === 'draft') {
+    console.log('\n[PASS] reply.scpt created reply draft successfully');
+  } else if (replyResult.data?.error) {
+    console.log(`\n[FAIL] reply.scpt error: ${replyResult.data.error}`);
+  } else {
+    console.log('\n[FAIL] reply.scpt did not return expected format');
+  }
+} else {
+  console.log('\n[SKIP] reply.scpt - no messages to test with');
+}
