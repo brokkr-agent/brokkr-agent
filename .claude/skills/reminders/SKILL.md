@@ -1,7 +1,7 @@
 ---
 name: reminders
 description: Manage macOS Reminders.app - create, list, complete, modify, delete reminders
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+allowed-tools: Read, Write, Edit, Bash, Task
 ---
 
 # Reminders Skill
@@ -22,6 +22,16 @@ Manage macOS Reminders.app via AppleScript for the Brokkr agent.
 - Delete reminders
 - Export reminders data to iCloud storage
 
+## Prerequisites
+
+**Permissions Required:**
+- System Settings -> Privacy & Security -> Automation -> Terminal -> Reminders
+
+**iCloud Sync:**
+- Reminders.app always syncs via iCloud
+- No "On My Mac" lists available
+- Changes sync across devices automatically
+
 ## Usage
 
 ### Via Command (Manual)
@@ -37,22 +47,6 @@ Triggered by notification monitor when:
 - Reminder with "[AGENT]" tag in name
 - Reminder due within 1 hour
 - High priority (!!!) reminder due today
-
-## Reference Documentation
-
-See `reference/` directory for detailed AppleScript examples.
-
-## Prerequisites
-
-**Permissions Required:**
-- System Settings -> Privacy & Security -> Automation -> Terminal -> Reminders
-
-**iCloud Sync:**
-- Reminders.app always syncs via iCloud
-- No "On My Mac" lists available
-- Changes sync across devices automatically
-
-## Usage
 
 ### From Node.js
 
