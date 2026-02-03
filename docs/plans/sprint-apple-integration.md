@@ -29,7 +29,7 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 | Plan | Status | Dependencies | Est. Tasks |
 |------|--------|--------------|------------|
 | [Calendar Skill](./2026-02-01-calendar-skill-plan.md) | ✅ Implemented | Notifications | 12 |
-| [Reminders Skill](./2026-02-01-reminders-skill-plan.md) | Not Started | Notifications | 11 |
+| [Reminders Skill](./2026-02-01-reminders-skill-plan.md) | ✅ Implemented | Notifications | 11 |
 | [Notes Skill](./2026-02-01-notes-skill-plan.md) | Not Started | Notifications | 13 |
 | [iCloud Sharing Skill](./2026-02-01-icloud-sharing-skill-plan.md) | Not Started | None | 9 |
 
