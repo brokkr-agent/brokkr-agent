@@ -57,3 +57,19 @@ if (listResult.success && Array.isArray(listResult.data) && listResult.data.leng
 } else {
   console.log('\n[SKIP] read-message.scpt - no messages to test with');
 }
+
+// Test compose (draft mode only - don't actually send)
+const composeResult = runScript('compose.scpt', [
+  'test@example.com',
+  'Test Subject from Brokkr',
+  'This is a test email body.',
+  'false' // Don't send, just create draft
+]);
+
+if (composeResult.success && composeResult.data.status === 'draft') {
+  console.log('\n[PASS] compose.scpt created draft successfully');
+} else if (composeResult.data?.error) {
+  console.log(`\n[FAIL] compose.scpt error: ${composeResult.data.error}`);
+} else {
+  console.log('\n[FAIL] compose.scpt did not return expected format');
+}
