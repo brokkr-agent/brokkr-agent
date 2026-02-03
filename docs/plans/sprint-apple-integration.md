@@ -16,7 +16,7 @@ Integrate macOS native applications and services with the Brokkr agent system. E
 |------|--------|--------------|------------|
 | [iMessage Skill](./2026-02-01-imessage-skill-plan.md) | ✅ Implemented | None | 9 |
 | [iMessage Advanced Assistant](./2026-02-01-imessage-advanced-assistant-plan.md) | Not Started | iMessage Skill (verify complete) | 26 |
-| [Email Skill](./2026-02-01-email-skill-plan.md) | Not Started | None | 15 |
+| [Email Skill](./2026-02-01-email-skill-plan.md) | ✅ Implemented | None | 15 |
 
 ### Phase 2: Apple Notifications (Priority: High - Foundation for Others)
 
